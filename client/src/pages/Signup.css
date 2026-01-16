@@ -1,0 +1,203 @@
+/* client/src/pages/Signup.css */
+/* client/src/index.css */
+:root {
+  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+/* IMPORTANT: Force the app to take full width and height */
+html, body, #root {
+  width: 100%;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background-color: #0a0a0a;
+  color: white;
+  display: block; /* Overrides default flex behavior that causes issues */
+}
+/* --- 1. CONTAINER LAYOUT --- */
+.auth-container { 
+  width: 100%; 
+  min-height: 100vh;
+  display: flex; 
+  justify-content: center; 
+  align-items: center; 
+  background-color: var(--bg-dark); 
+}
+
+.auth-box { 
+  background-color: var(--bg-card); 
+  padding: 40px; 
+  border-radius: 16px; 
+  width: 100%; 
+  max-width: 400px; 
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5); 
+  border: 1px solid var(--border-color);
+  position: relative;
+}
+
+/* --- 2. TEXT ELEMENTS --- */
+.auth-box h2 { 
+  text-align: center; 
+  margin-bottom: 8px; 
+  font-size: 1.8rem; 
+  color: white;
+}
+
+.auth-subtitle { 
+  text-align: center; 
+  color: var(--text-secondary); 
+  margin-bottom: 25px; 
+  font-size: 0.95rem;
+}
+
+/* --- 3. BACK BUTTON --- */
+.back-link-container {
+  width: 100%;
+  text-align: left;
+  margin-bottom: 15px;
+}
+
+.back-link {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: color 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.back-link:hover {
+  color: white;
+  text-decoration: none; 
+}
+
+/* --- 4. GOOGLE BUTTON --- */
+.btn-google {
+  width: 100%;
+  padding: 12px;
+  background-color: white;
+  color: #1a1a1a;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+.btn-google:hover {
+  background-color: #f2f2f2;
+}
+
+.btn-google:active {
+  transform: scale(0.98);
+}
+
+.google-icon {
+  width: 20px;
+  height: 20px;
+}
+
+/* --- 5. DIVIDER (OR) --- */
+.divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 20px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid #333;
+}
+
+.divider span {
+  padding: 0 10px;
+}
+
+/* --- 6. INPUT FORMS --- */
+.input-group { 
+  margin-bottom: 15px; 
+}
+
+.input-group label { 
+  display: block; 
+  margin-bottom: 6px; 
+  font-size: 0.9rem; 
+  color: var(--text-secondary); 
+  font-weight: 500;
+}
+
+.input-group input { 
+  width: 100%; 
+  padding: 12px 14px; 
+  border-radius: 8px; 
+  border: 1px solid #333; 
+  background-color: #2a2a2a; 
+  color: white; 
+  outline: none; 
+  font-size: 1rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.input-group input:focus { 
+  border-color: var(--accent-color); 
+  box-shadow: 0 0 0 2px rgba(100, 108, 255, 0.2);
+}
+
+/* --- 7. SUBMIT BUTTON --- */
+.btn-full { 
+  width: 100%; 
+  background-color: var(--accent-color); 
+  color: white; 
+  margin-top: 10px; 
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.btn-full:hover {
+  background-color: var(--accent-hover);
+}
+
+/* --- 8. LOGIN LINK --- */
+.auth-switch { 
+  margin-top: 20px; 
+  text-align: center; 
+  font-size: 0.9rem; 
+  color: var(--text-secondary); 
+}
+
+.auth-switch a { 
+  color: var(--accent-color); 
+  font-weight: 600;
+  transition: color 0.2s;
+}
+
+.auth-switch a:hover { 
+  color: var(--accent-hover); 
+  text-decoration: underline; 
+}
