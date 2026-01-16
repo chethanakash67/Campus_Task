@@ -1,9 +1,27 @@
 // client/src/pages/Settings.jsx
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
+import { useApp } from '../context/AppContext';
 import './Dashboard.css';
 
 function Settings() {
+  const navigate = useNavigate();
+  const { currentUser, isAuthenticated } = useApp();
+
+  useEffect(() => {
+    if (!isAuthenticated || !currentUser) {
+      navigate('/login');
+    }
+  }, [isAuthenticated, currentUser, navigate]);
+
+  if (!isAuthenticated || !currentUser) {
+    return null;
+  }
+
+  const userInitials = currentUser?.avatar || currentUser?.name?.substring(0, 2).toUpperCase() || 'JD';
+  const userName = currentUser?.name || 'John Doe';
+
   return (
     <div className="dashboard-container">
       <Sidebar />
@@ -19,12 +37,12 @@ function Settings() {
           <section className="settings-section">
             <h3>Profile</h3>
             <div className="profile-edit">
-                <div className="big-avatar">JD</div>
+                <div className="big-avatar">{userInitials}</div>
                 <button className="btn btn-primary">Change Avatar</button>
             </div>
             <div className="input-group">
                 <label>Display Name</label>
-                <input type="text" defaultValue="John Doe" />
+                <input type="text" defaultValue={userName} />
             </div>
           </section>
 

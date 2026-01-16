@@ -1,6 +1,7 @@
 // client/src/components/Sidebar.jsx
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useApp } from '../context/AppContext';
 // Importing the icons you used
 import { MdDashboard, MdSettings } from 'react-icons/md';
 import { FaUserFriends, FaCalendarAlt } from 'react-icons/fa';
@@ -9,9 +10,19 @@ import '../pages/Dashboard.css'; // Ensure this points to your CSS
 
 function Sidebar() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { currentUser, logout } = useApp();
 
   // Helper to highlight the active link
   const isActive = (path) => location.pathname === path ? 'active' : '';
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  const userInitials = currentUser?.avatar || currentUser?.name?.substring(0, 2).toUpperCase() || 'JD';
+  const userName = currentUser?.name || 'John Doe';
 
   return (
     <aside className="sidebar">
@@ -50,12 +61,22 @@ function Sidebar() {
 
       <div className="sidebar-footer">
           <div className="user-profile">
-              <div className="avatar">JD</div>
+              <div className="avatar">{userInitials}</div>
               <div className="user-info">
-                  <p className="user-name">John Doe</p>
-                  <Link to="/login" className="logout-link">
+                  <p className="user-name">{userName}</p>
+                  <button onClick={handleLogout} className="logout-link" style={{ 
+                    background: 'none', 
+                    border: 'none', 
+                    color: 'inherit', 
+                    cursor: 'pointer',
+                    padding: 0,
+                    fontSize: 'inherit',
+                    fontFamily: 'inherit',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}>
                       <FiLogOut style={{ marginRight: '5px' }} /> Logout
-                  </Link>
+                  </button>
               </div>
           </div>
       </div>

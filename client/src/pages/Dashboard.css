@@ -1095,3 +1095,691 @@
 .modal-content::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
+/* APPEND THIS TO THE END OF Dashboard.css - NEW FEATURES STYLES */
+
+/* === TABS NAVIGATION === */
+.tabs-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 40px;
+  border-bottom: 1px solid var(--border-color);
+  background-color: #0a0a0a;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.tab {
+  padding: 16px 24px;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: #888;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tab:hover {
+  color: white;
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.tab.active {
+  color: white;
+  border-bottom-color: var(--accent-color);
+  background-color: rgba(100, 108, 255, 0.1);
+}
+
+.team-filter-select {
+  padding: 8px 16px;
+  background-color: #121212;
+  border: 1px solid #333;
+  border-radius: 6px;
+  color: white;
+  font-size: 0.9rem;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s;
+  margin: 8px 0;
+}
+
+.team-filter-select:focus {
+  border-color: var(--accent-color);
+}
+
+/* === TASK TYPE SELECTOR === */
+.task-type-selector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.task-type-btn {
+  padding: 16px;
+  background-color: #2a2a2a;
+  border: 2px solid #444;
+  border-radius: 8px;
+  color: #ccc;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.95rem;
+}
+
+.task-type-btn:hover {
+  background-color: #333;
+  border-color: #555;
+}
+
+.task-type-btn.active {
+  background-color: rgba(100, 108, 255, 0.15);
+  border-color: var(--accent-color);
+  color: white;
+  box-shadow: 0 0 0 3px rgba(100, 108, 255, 0.1);
+}
+
+/* === TEMPLATE SELECTOR === */
+.template-selector {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.template-btn {
+  padding: 10px 14px;
+  background-color: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 6px;
+  color: #ccc;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.template-btn:hover {
+  background-color: rgba(100, 108, 255, 0.1);
+  border-color: var(--accent-color);
+  color: white;
+  transform: translateY(-1px);
+}
+
+/* === ENHANCED ASSIGNEE SELECTOR === */
+.assignee-selector-enhanced {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  padding: 12px;
+  background-color: #2a2a2a;
+  border-radius: 8px;
+  border: 1px solid #444;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.assignee-selector-enhanced .assignee-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background-color: #1e1e1e;
+  border: 2px solid #333;
+  padding: 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.assignee-selector-enhanced .assignee-option:hover {
+  background-color: #252525;
+  border-color: #444;
+}
+
+.assignee-selector-enhanced .assignee-option.selected {
+  border-color: var(--accent-color);
+  background-color: rgba(100, 108, 255, 0.1);
+}
+
+.assignee-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.assignee-name {
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.assignee-role {
+  color: #888;
+  font-size: 0.75rem;
+  margin-top: 2px;
+}
+
+.no-assignees {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 20px;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.label-info {
+  color: #888;
+  font-size: 0.85rem;
+  font-weight: 400;
+  margin-left: 6px;
+}
+
+/* === TASK CARD ENHANCEMENTS === */
+.task-type-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background-color: rgba(100, 108, 255, 0.2);
+  color: var(--accent-color);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.team-task-card {
+  border-left: 3px solid rgba(100, 108, 255, 0.5);
+}
+
+.personal-task-card {
+  border-left: 3px solid rgba(16, 185, 129, 0.5);
+}
+
+.task-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.quick-action-btn {
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+  font-size: 0.85rem;
+}
+
+.quick-action-btn:hover {
+  background-color: rgba(100, 108, 255, 0.2);
+  color: var(--accent-color);
+}
+
+.more-assignees {
+  background: #646cff !important;
+  color: white !important;
+  font-weight: 700;
+}
+
+/* === MODAL ENHANCEMENTS === */
+.modal-create-task {
+  max-width: 650px;
+}
+
+.modal-create-task .form-group {
+  margin-bottom: 20px;
+}
+
+/* === EMPTY STATE FOR TABS === */
+.empty-state-tabs {
+  text-align: center;
+  padding: 80px 20px;
+}
+
+.empty-state-tabs h3 {
+  color: white;
+  font-size: 1.5rem;
+  margin-bottom: 12px;
+}
+
+.empty-state-tabs p {
+  color: #888;
+  font-size: 1rem;
+  margin-bottom: 24px;
+}
+
+/* === TASK CARD RELATIVE POSITIONING === */
+.task-card {
+  position: relative;
+}
+
+/* === RESPONSIVE ENHANCEMENTS === */
+@media (max-width: 1024px) {
+  .tabs-container {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 16px 20px;
+  }
+  
+  .tabs {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .team-filter-select {
+    width: 100%;
+    margin-top: 12px;
+  }
+  
+  .task-type-selector {
+    grid-template-columns: 1fr;
+  }
+  
+  .template-selector {
+    grid-template-columns: 1fr;
+  }
+  
+  .assignee-selector-enhanced {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .tab {
+    padding: 12px 16px;
+    font-size: 0.85rem;
+  }
+  
+  .task-type-badge {
+    font-size: 0.65rem;
+    padding: 3px 6px;
+  }
+  
+  .template-btn {
+    font-size: 0.8rem;
+    padding: 8px 12px;
+  }
+}
+
+/* === ADDITIONAL UTILITY STYLES === */
+.badge-info {
+  background-color: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.badge-success {
+  background-color: rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* === IMPROVED SCROLLBAR FOR ASSIGNEE SELECTOR === */
+.assignee-selector-enhanced::-webkit-scrollbar {
+  width: 6px;
+}
+
+.assignee-selector-enhanced::-webkit-scrollbar-track {
+  background: #1e1e1e;
+  border-radius: 3px;
+}
+
+.assignee-selector-enhanced::-webkit-scrollbar-thumb {
+  background: #444;
+  border-radius: 3px;
+}
+
+.assignee-selector-enhanced::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* === ANIMATION FOR TASK TYPE CHANGE === */
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.task-type-selector .task-type-btn.active {
+  animation: fadeInScale 0.2s ease-out;
+}
+/* APPEND TO Dashboard.css - ENHANCED TEAMS STYLES */
+
+/* === TEAM CARD ENHANCEMENTS === */
+.team-card {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.team-card.expanded {
+  grid-column: span 2;
+}
+
+@media (max-width: 768px) {
+  .team-card.expanded {
+    grid-column: span 1;
+  }
+}
+
+/* === TEAM STATISTICS === */
+.team-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  padding: 16px;
+  background-color: #1e1e1e;
+  border-radius: 8px;
+  margin: 16px 0;
+  border: 1px solid #333;
+}
+
+.team-stat {
+  text-align: center;
+  padding: 8px;
+}
+
+.team-stat .stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 4px;
+}
+
+.team-stat .stat-label {
+  font-size: 0.75rem;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.team-stat .stat-pending {
+  color: #888;
+}
+
+.team-stat .stat-progress {
+  color: #3b82f6;
+}
+
+.team-stat .stat-done {
+  color: #10b981;
+}
+
+/* === TASKS PREVIEW === */
+.team-tasks-preview {
+  margin-top: 20px;
+  border-top: 1px solid #333;
+  padding-top: 16px;
+}
+
+.preview-toggle {
+  width: 100%;
+  padding: 12px;
+  background-color: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 6px;
+  color: white;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.9rem;
+}
+
+.preview-toggle:hover {
+  background-color: #252525;
+  border-color: var(--accent-color);
+}
+
+.preview-toggle svg {
+  margin-right: 8px;
+}
+
+.toggle-icon {
+  font-size: 0.8rem;
+  color: #888;
+}
+
+.tasks-preview-list {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.preview-task-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  background-color: #1e1e1e;
+  border-radius: 6px;
+  border: 1px solid #333;
+  transition: all 0.2s;
+}
+
+.preview-task-item:hover {
+  border-color: #444;
+  background-color: #252525;
+}
+
+.priority-indicator {
+  width: 4px;
+  height: 40px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.priority-indicator.high {
+  background: #ef4444;
+}
+
+.priority-indicator.medium {
+  background: #f59e0b;
+}
+
+.priority-indicator.low {
+  background: #10b981;
+}
+
+.preview-task-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.preview-task-title {
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preview-task-meta {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.status-mini {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.status-mini.todo {
+  background: rgba(115, 115, 115, 0.2);
+  color: #a3a3a3;
+}
+
+.status-mini.in-progress {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+}
+
+.status-mini.done {
+  background: rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
+}
+
+.due-mini {
+  font-size: 0.75rem;
+  color: #888;
+}
+
+/* === MORE MEMBERS ITEM === */
+.more-members {
+  background: rgba(100, 108, 255, 0.1);
+  border: 1px solid rgba(100, 108, 255, 0.3);
+  justify-content: center;
+  color: var(--accent-color);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* === TEAM CARD ACTIONS ENHANCEMENT === */
+.team-card-header .icon-btn {
+  font-size: 0.9rem;
+}
+
+/* === RESPONSIVE ADJUSTMENTS === */
+@media (max-width: 1024px) {
+  .team-stats {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  
+  .team-stat .stat-value {
+    font-size: 1.3rem;
+  }
+  
+  .team-stat .stat-label {
+    font-size: 0.7rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .team-stats {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    padding: 12px;
+  }
+  
+  .team-stat {
+    padding: 4px;
+  }
+  
+  .team-stat .stat-value {
+    font-size: 1.1rem;
+  }
+  
+  .team-stat .stat-label {
+    font-size: 0.65rem;
+  }
+  
+  .preview-task-title {
+    font-size: 0.85rem;
+  }
+  
+  .priority-indicator {
+    height: 30px;
+  }
+}
+
+/* === ANIMATION FOR TEAM CARD EXPANSION === */
+@keyframes expandCard {
+  from {
+    grid-column: span 1;
+  }
+  to {
+    grid-column: span 2;
+  }
+}
+
+/* === IMPROVED EMPTY STATE === */
+.empty-state-large .btn {
+  margin-top: 16px;
+}
+
+/* === TEAM COLOR DOTS WITH GLOW === */
+.team-card .dot {
+  box-shadow: 0 0 8px currentColor;
+}
+
+.team-card .dot.purple {
+  box-shadow: 0 0 8px #8b5cf6;
+}
+
+.team-card .dot.green {
+  box-shadow: 0 0 8px #10b981;
+}
+
+.team-card .dot.blue {
+  box-shadow: 0 0 8px #3b82f6;
+}
+
+.team-card .dot.red {
+  box-shadow: 0 0 8px #ef4444;
+}
+
+.team-card .dot.yellow {
+  box-shadow: 0 0 8px #f59e0b;
+}
+
+.team-card .dot.pink {
+  box-shadow: 0 0 8px #ec4899;
+}

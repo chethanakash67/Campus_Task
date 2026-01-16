@@ -1,5 +1,6 @@
 // client/src/pages/Calendar.jsx
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Toast from '../components/Toast';
 import { FaChevronLeft, FaChevronRight } from 'react-icons/fa';
@@ -7,7 +8,18 @@ import { useApp } from '../context/AppContext';
 import './Dashboard.css';
 
 function Calendar() {
-  const { tasks, toasts, removeToast } = useApp();
+  const navigate = useNavigate();
+  const { tasks, toasts, removeToast, isAuthenticated, currentUser } = useApp();
+
+  useEffect(() => {
+    if (!isAuthenticated || !currentUser) {
+      navigate('/login');
+    }
+  }, [isAuthenticated, currentUser, navigate]);
+
+  if (!isAuthenticated || !currentUser) {
+    return null;
+  }
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const monthNames = ["January", "February", "March", "April", "May", "June",
@@ -147,8 +159,10 @@ function Calendar() {
                       </p>
                     )}
                     <div className="upcoming-assignees">
-                      {task.assignees.map((initial, idx) => (
-                        <div key={idx} className="mini-avatar">{initial}</div>
+                      {task.assignees && task.assignees.slice(0, 3).map((assignee, idx) => (
+                        <div key={idx} className="mini-avatar" title={assignee.name || assignee.id}>
+                          {assignee.id || assignee.name?.charAt(0) || '?'}
+                        </div>
                       ))}
                     </div>
                   </div>

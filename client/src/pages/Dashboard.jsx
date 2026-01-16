@@ -1,21 +1,50 @@
-// client/src/pages/Dashboard.jsx
-import React, { useState, useMemo } from 'react';
+// client/src/pages/Dashboard.jsx - ENHANCED WITH PERSONAL & TEAM TASKS
+import React, { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import TaskDetailModal from '../components/TaskDetailModal';
 import Toast from '../components/Toast';
-import { FaPlus, FaEllipsisH, FaTimes, FaUserPlus, FaSearch, FaFilter } from 'react-icons/fa';
+import { FaPlus, FaEllipsisH, FaTimes, FaUsers, FaUser, FaSearch, FaFilter, FaCopy, FaFileImport } from 'react-icons/fa';
 import { useApp } from '../context/AppContext';
 import './Dashboard.css';
 
 function Dashboard() {
-  const { tasks, addTask, moveTask, toasts, removeToast, currentUser } = useApp();
-  
+  const navigate = useNavigate();
+  const { 
+    tasks, 
+    addTask, 
+    moveTask, 
+    duplicateTask,
+    toasts, 
+    removeToast,
+    addToast,
+    currentUser,
+    isAuthenticated,
+    getMyTeams,
+    getAllTeamMembers,
+    taskTemplates
+  } = useApp();
+
   const [showModal, setShowModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
   const [draggedTask, setDraggedTask] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterPriority, setFilterPriority] = useState('all');
   const [filterAssignee, setFilterAssignee] = useState('all');
+  const [activeTab, setActiveTab] = useState('personal'); // 'personal' or 'team'
+  const [selectedTeamFilter, setSelectedTeamFilter] = useState('all');
+  
+  // Redirect to login if not authenticated (check after state initialization)
+  useEffect(() => {
+    // Small delay to ensure state is loaded from localStorage
+    const timer = setTimeout(() => {
+      if (!isAuthenticated || !currentUser) {
+        navigate('/login', { replace: true });
+      }
+    }, 50);
+    
+    return () => clearTimeout(timer);
+  }, [isAuthenticated, currentUser, navigate]);
 
   // New Task Form State
   const [newTask, setNewTask] = useState({
@@ -24,66 +53,150 @@ function Dashboard() {
     priority: "Medium",
     dueDate: "",
     tags: [],
-    assignees: [currentUser.id],
+    assignees: [],
     status: "todo",
-    newPersonName: "",
+    taskType: "personal",
+    teamId: null,
     newTag: ""
   });
 
-  // Available Team Members (Mock Data)
-  const teamMembers = [
-    { id: "JD", name: "John Doe" },
-    { id: "AS", name: "Alice Smith" },
-    { id: "MK", name: "Mike Kon" }
-  ];
+  // Show loading or redirect if not authenticated
+  if (!isAuthenticated || !currentUser) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        fontSize: '1.2rem',
+        color: '#666'
+      }}>
+        Loading...
+      </div>
+    );
+  }
 
-  // Filtered tasks based on search and filters
+  const myTeams = getMyTeams();
+  const allMembers = getAllTeamMembers();
+
+  // Filtered tasks based on tab and filters
   const filteredTasks = useMemo(() => {
-    return tasks.filter(task => {
+    let filtered = tasks;
+
+    // Filter by tab (Personal or Team)
+    if (activeTab === 'personal') {
+      filtered = filtered.filter(task => 
+        task.taskType === 'personal' && 
+        task.assignees?.some(a => a.id === currentUser?.id)
+      );
+    } else {
+      filtered = filtered.filter(task => task.taskType === 'team');
+      
+      // Filter by selected team
+      if (selectedTeamFilter !== 'all') {
+        filtered = filtered.filter(task => task.teamId === parseInt(selectedTeamFilter));
+      }
+    }
+
+    // Search filter
+    filtered = filtered.filter(task => {
       const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           (task.description && task.description.toLowerCase().includes(searchQuery.toLowerCase()));
       const matchesPriority = filterPriority === 'all' || task.priority.toLowerCase() === filterPriority;
-      const matchesAssignee = filterAssignee === 'all' || task.assignees.includes(filterAssignee);
+      const matchesAssignee = filterAssignee === 'all' || task.assignees?.some(a => a.id === filterAssignee);
       
       return matchesSearch && matchesPriority && matchesAssignee;
     });
-  }, [tasks, searchQuery, filterPriority, filterAssignee]);
+
+    return filtered;
+  }, [tasks, searchQuery, filterPriority, filterAssignee, activeTab, selectedTeamFilter, currentUser?.id]);
 
   // Statistics
-  const stats = {
-    total: tasks.length,
-    todo: tasks.filter(t => t.status === 'todo').length,
-    inProgress: tasks.filter(t => t.status === 'in-progress').length,
-    done: tasks.filter(t => t.status === 'done').length,
-    overdue: tasks.filter(t => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'done').length
-  };
+  const stats = useMemo(() => {
+    const relevantTasks = activeTab === 'personal' 
+      ? tasks.filter(t => t.taskType === 'personal' && t.assignees?.some(a => a.id === currentUser?.id))
+      : tasks.filter(t => t.taskType === 'team' && (selectedTeamFilter === 'all' || t.teamId === parseInt(selectedTeamFilter)));
 
-  // Handle Text Inputs
+    return {
+      total: relevantTasks.length,
+      todo: relevantTasks.filter(t => t.status === 'todo').length,
+      inProgress: relevantTasks.filter(t => t.status === 'in-progress').length,
+      done: relevantTasks.filter(t => t.status === 'done').length,
+      overdue: relevantTasks.filter(t => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'done').length
+    };
+  }, [tasks, activeTab, selectedTeamFilter, currentUser?.id]);
+
+  // Handle input changes
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setNewTask({ ...newTask, [name]: value });
   };
 
-  // Handle Toggling Existing Members
-  const toggleAssignee = (initial) => {
-    let updatedAssignees;
-    if (newTask.assignees.includes(initial)) {
-      updatedAssignees = newTask.assignees.filter(a => a !== initial);
-    } else {
-      updatedAssignees = [...newTask.assignees, initial];
-    }
-    setNewTask({ ...newTask, assignees: updatedAssignees });
+  // Handle task type change
+  const handleTaskTypeChange = (type) => {
+    setNewTask({ 
+      ...newTask, 
+      taskType: type,
+      teamId: type === 'personal' ? null : newTask.teamId,
+      assignees: type === 'personal' && currentUser ? [{ id: currentUser.id, name: currentUser.name, type: 'user' }] : []
+    });
   };
 
-  // Handle Adding Task
+  // Handle team selection
+  const handleTeamSelect = (e) => {
+    const teamId = e.target.value ? parseInt(e.target.value) : null;
+    const team = myTeams.find(t => t.id === teamId);
+    
+    setNewTask({ 
+      ...newTask, 
+      teamId,
+      assignees: team ? team.members.slice(0, 1).map(m => ({ ...m, type: 'user' })) : []
+    });
+  };
+
+  // Toggle assignee
+  const toggleAssignee = (member) => {
+    const isSelected = newTask.assignees.some(a => a.id === member.id);
+    if (isSelected) {
+      setNewTask({
+        ...newTask,
+        assignees: newTask.assignees.filter(a => a.id !== member.id)
+      });
+    } else {
+      setNewTask({
+        ...newTask,
+        assignees: [...newTask.assignees, { ...member, type: 'user' }]
+      });
+    }
+  };
+
+  // Add task from template
+  const applyTemplate = (template) => {
+    setNewTask({
+      ...newTask,
+      title: template.name,
+      description: template.description,
+      priority: template.priority,
+      tags: [...template.tags],
+      subtasks: template.subtasks.map((st, idx) => ({ id: idx + 1, ...st }))
+    });
+  };
+
+  // Handle adding task
   const handleAddTask = (e) => {
     e.preventDefault();
     if (!newTask.title) return;
 
-    let finalAssignees = [...newTask.assignees];
-    if (newTask.newPersonName.trim()) {
-      const initials = newTask.newPersonName.substring(0, 2).toUpperCase();
-      finalAssignees.push(initials);
+    // Ensure at least one assignee for team tasks
+    if (newTask.taskType === 'team' && newTask.assignees.length === 0) {
+      addToast('Please assign at least one team member', 'error');
+      return;
+    }
+
+    // Ensure team is selected for team tasks
+    if (newTask.taskType === 'team' && !newTask.teamId) {
+      addToast('Please select a team', 'error');
+      return;
     }
 
     const taskToAdd = {
@@ -93,25 +206,34 @@ function Dashboard() {
       status: newTask.status,
       dueDate: newTask.dueDate,
       tags: newTask.tags,
-      assignees: finalAssignees
+      assignees: newTask.assignees,
+      taskType: newTask.taskType,
+      teamId: newTask.teamId,
+      subtasks: newTask.subtasks || []
     };
 
     addTask(taskToAdd);
     setShowModal(false);
+    resetForm();
+  };
+
+  const resetForm = () => {
     setNewTask({ 
       title: "", 
       description: "",
       priority: "Medium", 
       dueDate: "",
       tags: [],
-      assignees: [currentUser.id], 
+      assignees: [],
       status: "todo",
-      newPersonName: "",
-      newTag: ""
+      taskType: "personal",
+      teamId: null,
+      newTag: "",
+      subtasks: []
     });
   };
 
-  // Drag and Drop Handlers
+  // Drag and Drop
   const handleDragStart = (e, task) => {
     setDraggedTask(task);
     e.dataTransfer.effectAllowed = 'move';
@@ -134,7 +256,7 @@ function Dashboard() {
     setDraggedTask(null);
   };
 
-  // Add tag to new task
+  // Tag management
   const addTag = () => {
     if (newTask.newTag.trim() && !newTask.tags.includes(newTask.newTag.trim())) {
       setNewTask({ 
@@ -152,23 +274,70 @@ function Dashboard() {
     });
   };
 
+  // Quick actions
+  const handleQuickDuplicate = (task) => {
+    duplicateTask(task.id);
+  };
+
+  // Get available assignees based on task type
+  const getAvailableAssignees = () => {
+    if (newTask.taskType === 'personal' && currentUser) {
+      return [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: 'You' }];
+    } else if (newTask.teamId) {
+      const team = myTeams.find(t => t.id === newTask.teamId);
+      return team ? team.members : [];
+    }
+    return [];
+  };
+
   return (
     <div className="dashboard-container">
       <Sidebar />
       <main className="main-content">
-        {/* Toast Notifications */}
         <Toast toasts={toasts} removeToast={removeToast} />
 
-        {/* Header with Stats */}
+        {/* Header */}
         <header className="top-bar">
           <div className="page-title">
-            <h1>Engineering Project</h1>
-            <p>Sprint 4 • Due Oct 24</p>
+            <h1>Dashboard</h1>
+            <p>Manage your tasks and projects</p>
           </div>
           <button className="btn-primary" onClick={() => setShowModal(true)}>
             <FaPlus style={{ marginRight: '8px' }} /> New Task
           </button>
         </header>
+
+        {/* Tab Navigation */}
+        <div className="tabs-container">
+          <div className="tabs">
+            <button 
+              className={`tab ${activeTab === 'personal' ? 'active' : ''}`}
+              onClick={() => setActiveTab('personal')}
+            >
+              <FaUser /> Personal Tasks
+            </button>
+            <button 
+              className={`tab ${activeTab === 'team' ? 'active' : ''}`}
+              onClick={() => setActiveTab('team')}
+            >
+              <FaUsers /> Team Tasks
+            </button>
+          </div>
+          
+          {/* Team filter for team tasks */}
+          {activeTab === 'team' && myTeams.length > 0 && (
+            <select 
+              className="team-filter-select"
+              value={selectedTeamFilter}
+              onChange={(e) => setSelectedTeamFilter(e.target.value)}
+            >
+              <option value="all">All Teams</option>
+              {myTeams.map(team => (
+                <option key={team.id} value={team.id}>{team.name}</option>
+              ))}
+            </select>
+          )}
+        </div>
 
         {/* Stats Cards */}
         <div className="stats-container">
@@ -196,7 +365,7 @@ function Dashboard() {
           )}
         </div>
 
-        {/* Search and Filter Bar */}
+        {/* Search and Filter */}
         <div className="filter-bar">
           <div className="search-box">
             <FaSearch className="search-icon" />
@@ -217,7 +386,7 @@ function Dashboard() {
             </select>
             <select value={filterAssignee} onChange={(e) => setFilterAssignee(e.target.value)}>
               <option value="all">All Assignees</option>
-              {teamMembers.map(member => (
+              {allMembers.map(member => (
                 <option key={member.id} value={member.id}>{member.name}</option>
               ))}
             </select>
@@ -252,6 +421,7 @@ function Dashboard() {
                       onDragStart={handleDragStart}
                       onDragEnd={handleDragEnd}
                       onClick={() => setSelectedTask(task)}
+                      onDuplicate={handleQuickDuplicate}
                     />
                   ))
                 )}
@@ -263,15 +433,71 @@ function Dashboard() {
         {/* Create Task Modal */}
         {showModal && (
           <div className="modal-overlay">
-            <div className="modal-content">
+            <div className="modal-content modal-create-task">
               <div className="modal-header">
                 <h2>Create New Task</h2>
-                <button className="close-btn" onClick={() => setShowModal(false)}>
+                <button className="close-btn" onClick={() => { setShowModal(false); resetForm(); }}>
                   <FaTimes />
                 </button>
               </div>
               
               <form onSubmit={handleAddTask}>
+                {/* Task Type Selection */}
+                <div className="form-group">
+                  <label>Task Type *</label>
+                  <div className="task-type-selector">
+                    <button
+                      type="button"
+                      className={`task-type-btn ${newTask.taskType === 'personal' ? 'active' : ''}`}
+                      onClick={() => handleTaskTypeChange('personal')}
+                    >
+                      <FaUser /> Personal Task
+                    </button>
+                    <button
+                      type="button"
+                      className={`task-type-btn ${newTask.taskType === 'team' ? 'active' : ''}`}
+                      onClick={() => handleTaskTypeChange('team')}
+                    >
+                      <FaUsers /> Team Task
+                    </button>
+                  </div>
+                </div>
+
+                {/* Team Selection (only for team tasks) */}
+                {newTask.taskType === 'team' && (
+                  <div className="form-group">
+                    <label>Select Team *</label>
+                    <select 
+                      value={newTask.teamId || ''} 
+                      onChange={handleTeamSelect}
+                      required
+                    >
+                      <option value="">Choose a team...</option>
+                      {myTeams.map(team => (
+                        <option key={team.id} value={team.id}>{team.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Template Selection */}
+                <div className="form-group">
+                  <label>Use Template (Optional)</label>
+                  <div className="template-selector">
+                    {taskTemplates.map((template, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        className="template-btn"
+                        onClick={() => applyTemplate(template)}
+                        title={template.description}
+                      >
+                        <FaFileImport /> {template.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="form-group">
                   <label>Task Title *</label>
                   <input 
@@ -326,6 +552,40 @@ function Dashboard() {
                   </div>
                 </div>
 
+                {/* Assignees */}
+                <div className="form-group">
+                  <label>
+                    Assign To {newTask.taskType === 'team' && '*'}
+                    <span className="label-info">
+                      ({newTask.assignees.length} selected)
+                    </span>
+                  </label>
+                  <div className="assignee-selector-enhanced">
+                    {getAvailableAssignees().map(member => (
+                      <div 
+                        key={member.id} 
+                        className={`assignee-option ${newTask.assignees.some(a => a.id === member.id) ? 'selected' : ''}`}
+                        onClick={() => newTask.taskType !== 'personal' && toggleAssignee(member)}
+                        style={{ cursor: newTask.taskType === 'personal' ? 'not-allowed' : 'pointer' }}
+                      >
+                        <div className="mini-avatar">{member.id}</div>
+                        <div className="assignee-info">
+                          <div className="assignee-name">{member.name}</div>
+                          <div className="assignee-role">{member.role}</div>
+                        </div>
+                      </div>
+                    ))}
+                    {getAvailableAssignees().length === 0 && (
+                      <div className="no-assignees">
+                        {newTask.taskType === 'team' 
+                          ? 'Please select a team first' 
+                          : 'Personal tasks are assigned to you'}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Tags */}
                 <div className="form-group">
                   <label>Tags</label>
                   <div className="tags-input">
@@ -353,32 +613,6 @@ function Dashboard() {
                   </div>
                 </div>
 
-                <div className="form-group">
-                  <label>Assign To</label>
-                  <div className="assignee-selector">
-                    {teamMembers.map(member => (
-                      <div 
-                        key={member.id} 
-                        className={`assignee-option ${newTask.assignees.includes(member.id) ? 'selected' : ''}`}
-                        onClick={() => toggleAssignee(member.id)}
-                      >
-                        <div className="mini-avatar">{member.id}</div>
-                        <span>{member.name}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="add-person-input">
-                    <FaUserPlus className="input-icon" />
-                    <input 
-                      type="text" 
-                      name="newPersonName"
-                      placeholder="Or type name to invite..." 
-                      value={newTask.newPersonName}
-                      onChange={handleInputChange}
-                    />
-                  </div>
-                </div>
-
                 <button type="submit" className="btn btn-full">Create Task</button>
               </form>
             </div>
@@ -397,25 +631,48 @@ function Dashboard() {
   );
 }
 
-function TaskCard({ task, onDragStart, onDragEnd, onClick }) {
+// Enhanced Task Card Component
+function TaskCard({ task, onDragStart, onDragEnd, onClick, onDuplicate }) {
+  const [showQuickActions, setShowQuickActions] = useState(false);
   const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done';
   const completedSubtasks = task.subtasks?.filter(st => st.completed).length || 0;
   const totalSubtasks = task.subtasks?.length || 0;
 
   return (
     <div 
-      className={`task-card ${isOverdue ? 'overdue-card' : ''}`}
+      className={`task-card ${isOverdue ? 'overdue-card' : ''} ${task.taskType === 'team' ? 'team-task-card' : 'personal-task-card'}`}
       draggable
       onDragStart={(e) => onDragStart(e, task)}
       onDragEnd={onDragEnd}
       onClick={onClick}
+      onMouseEnter={() => setShowQuickActions(true)}
+      onMouseLeave={() => setShowQuickActions(false)}
     >
+      {/* Task Type Badge */}
+      {task.taskType === 'team' && (
+        <div className="task-type-badge">
+          <FaUsers /> Team
+        </div>
+      )}
+
       <div className="task-header">
         <span className={`priority-tag ${task.priority.toLowerCase()}`}>{task.priority}</span>
-        <button className="more-options" onClick={(e) => e.stopPropagation()}>
-          <FaEllipsisH />
-        </button>
+        <div className="task-actions">
+          {showQuickActions && (
+            <button 
+              className="quick-action-btn" 
+              onClick={(e) => { e.stopPropagation(); onDuplicate(task); }}
+              title="Duplicate task"
+            >
+              <FaCopy />
+            </button>
+          )}
+          <button className="more-options" onClick={(e) => e.stopPropagation()}>
+            <FaEllipsisH />
+          </button>
+        </div>
       </div>
+      
       <h3>{task.title}</h3>
       
       {task.description && (
@@ -445,9 +702,12 @@ function TaskCard({ task, onDragStart, onDragEnd, onClick }) {
 
       <div className="task-footer">
         <div className="assignees">
-          {task.assignees.map((initial, index) => (
-            <span key={index} className="mini-avatar" title={initial}>{initial}</span>
+          {task.assignees.slice(0, 3).map((assignee, index) => (
+            <span key={index} className="mini-avatar" title={assignee.name}>{assignee.id}</span>
           ))}
+          {task.assignees.length > 3 && (
+            <span className="mini-avatar more-assignees">+{task.assignees.length - 3}</span>
+          )}
         </div>
         {task.dueDate && (
           <span className={`due-date ${isOverdue ? 'overdue' : ''}`}>
