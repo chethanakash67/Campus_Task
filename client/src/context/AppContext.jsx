@@ -1,382 +1,261 @@
-// client/src/context/AppContext.jsx - INTEGRATED WITH BACKEND API
-import React, { createContext, useContext, useState, useEffect } from 'react';
+// client/src/context/AppContext.jsx - FIXED LOGIN FUNCTION
+import React, { createContext, useState, useContext, useEffect } from 'react';
 import axios from 'axios';
 
 const AppContext = createContext();
 
-// Configure axios defaults
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
-console.log('🔗 API URL configured:', API_URL);
-axios.defaults.baseURL = API_URL;
-axios.defaults.timeout = 10000; // 10 second timeout
+export function AppProvider({ children }) {
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
-export const useApp = () => {
-  const context = useContext(AppContext);
-  if (!context) {
-    throw new Error('useApp must be used within AppProvider');
-  }
-  return context;
-};
-
-export const AppProvider = ({ children }) => {
-  // Toast notifications
-  const [toasts, setToasts] = useState([]);
-  
-  // Auth state
+  // Check localStorage on mount
   const [currentUser, setCurrentUser] = useState(() => {
     const saved = localStorage.getItem('campusUser');
     return saved ? JSON.parse(saved) : null;
   });
 
-  const [token, setToken] = useState(() => {
-    return localStorage.getItem('campusToken') || null;
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return !!localStorage.getItem('campusToken');
   });
 
-  // Data state
-  const [teams, setTeams] = useState([]);
   const [tasks, setTasks] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [teams, setTeams] = useState([]);
+  const [toasts, setToasts] = useState([]);
 
-  // Task templates for quick creation
-  const [taskTemplates] = useState([
-    { 
-      name: "Bug Fix",
-      description: "Fix a reported bug",
-      priority: "High",
-      tags: ["Bug", "Fix"],
-      subtasks: [
-        { text: "Reproduce the bug", completed: false },
-        { text: "Identify root cause", completed: false },
-        { text: "Implement fix", completed: false },
-        { text: "Test fix", completed: false }
-      ]
-    },
-    { 
-      name: "Feature Development",
-      description: "Develop a new feature",
-      priority: "Medium",
-      tags: ["Feature", "Development"],
-      subtasks: [
-        { text: "Design specification", completed: false },
-        { text: "Implementation", completed: false },
-        { text: "Testing", completed: false },
-        { text: "Documentation", completed: false }
-      ]
-    },
-    { 
-      name: "Code Review",
-      description: "Review pull request",
-      priority: "Medium",
-      tags: ["Review", "Code"],
-      subtasks: []
-    },
-    { 
-      name: "Meeting Preparation",
-      description: "Prepare for upcoming meeting",
-      priority: "Low",
-      tags: ["Meeting", "Preparation"],
-      subtasks: [
-        { text: "Review agenda", completed: false },
-        { text: "Prepare materials", completed: false },
-        { text: "Send invites", completed: false }
-      ]
-    }
-  ]);
-
-  // Set auth token in axios headers
+  // Fetch user data on mount if authenticated
   useEffect(() => {
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      localStorage.setItem('campusToken', token);
-    } else {
-      delete axios.defaults.headers.common['Authorization'];
-      localStorage.removeItem('campusToken');
+    const token = localStorage.getItem('campusToken');
+    if (token && !currentUser) {
+      fetchUserData();
     }
-  }, [token]);
-
-  // Save user to localStorage
-  useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem('campusUser', JSON.stringify(currentUser));
-    } else {
-      localStorage.removeItem('campusUser');
-    }
-  }, [currentUser]);
-
-  // Fetch initial data
-  useEffect(() => {
-    if (token && currentUser) {
-      fetchTeams();
+    if (isAuthenticated) {
       fetchTasks();
+      fetchTeams();
     }
-  }, [token, currentUser]);
+  }, [isAuthenticated]);
 
-  // ==================== TOAST FUNCTIONS ====================
-  const addToast = (message, type = 'success') => {
-    const id = Date.now();
-    setToasts(prev => [...prev, { id, message, type }]);
-    setTimeout(() => removeToast(id), 3000);
-  };
-
-  const removeToast = (id) => {
-    setToasts(prev => prev.filter(toast => toast.id !== id));
-  };
-
-  // ==================== AUTH FUNCTIONS ====================
-  const register = async (name, email, password) => {
+  const fetchUserData = async () => {
     try {
-      setLoading(true);
-      const response = await axios.post('/auth/register', { name, email, password });
-      setCurrentUser(response.data.user);
-      setToken(response.data.token);
-      addToast('Registration successful!');
-      return response.data;
+      const token = localStorage.getItem('campusToken');
+      const response = await axios.get(`${API_URL}/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setCurrentUser(response.data);
+      localStorage.setItem('campusUser', JSON.stringify(response.data));
     } catch (error) {
-      console.error('Registration error:', error);
-      let message = 'Registration failed. Please try again.';
-      
-      if (error.code === 'ECONNREFUSED' || error.message.includes('Network Error')) {
-        message = 'Cannot connect to server. Please make sure the server is running on port 5001.';
-      } else if (error.response) {
-        // Server responded with error
-        message = error.response.data?.error || `Registration failed: ${error.response.status}`;
-      } else if (error.request) {
-        // Request made but no response
-        message = 'Server did not respond. Please check if the server is running.';
-      } else {
-        message = error.message || 'Registration failed. Please try again.';
+      console.error('Failed to fetch user data:', error);
+      // If token is invalid, logout
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        logout();
       }
-      
-      addToast(message, 'error');
-      throw error;
-    } finally {
-      setLoading(false);
     }
   };
 
+  const fetchTasks = async () => {
+    try {
+      const token = localStorage.getItem('campusToken');
+      const response = await axios.get(`${API_URL}/tasks`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setTasks(response.data);
+    } catch (error) {
+      console.error('Error fetching tasks:', error);
+    }
+  };
+
+  const fetchTeams = async () => {
+    try {
+      const token = localStorage.getItem('campusToken');
+      const response = await axios.get(`${API_URL}/teams/my-teams`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setTeams(response.data);
+    } catch (error) {
+      console.error('Error fetching teams:', error);
+    }
+  };
+
+  // FIXED LOGIN FUNCTION - Direct login without OTP
   const login = async (email, password) => {
     try {
-      setLoading(true);
-      const response = await axios.post('/auth/login', { email, password });
-      setCurrentUser(response.data.user);
-      setToken(response.data.token);
-      addToast('Login successful!');
+      const response = await axios.post(`${API_URL}/auth/login`, {
+        email,
+        password
+      });
+
+      const { token, user } = response.data;
+      
+      // Store in localStorage
+      localStorage.setItem('campusToken', token);
+      localStorage.setItem('campusUser', JSON.stringify(user));
+      
+      // Update state
+      setCurrentUser(user);
+      setIsAuthenticated(true);
+      
+      // Fetch user's data
+      await fetchTasks();
+      await fetchTeams();
+      
+      addToast('Login successful!', 'success');
       return response.data;
     } catch (error) {
       console.error('Login error:', error);
-      let message = 'Login failed. Please try again.';
-      
-      if (error.code === 'ECONNREFUSED' || error.message.includes('Network Error')) {
-        message = 'Cannot connect to server. Please make sure the server is running on port 5001.';
-      } else if (error.response) {
-        // Server responded with error
-        message = error.response.data?.error || `Login failed: ${error.response.status}`;
-      } else if (error.request) {
-        // Request made but no response
-        message = 'Server did not respond. Please check if the server is running.';
-      } else {
-        message = error.message || 'Login failed. Please try again.';
-      }
-      
-      addToast(message, 'error');
       throw error;
-    } finally {
-      setLoading(false);
     }
   };
 
   const logout = () => {
+    localStorage.removeItem('campusToken');
+    localStorage.removeItem('campusUser');
     setCurrentUser(null);
-    setToken(null);
-    setTeams([]);
+    setIsAuthenticated(false);
     setTasks([]);
-    addToast('Logged out successfully', 'info');
+    setTeams([]);
+    addToast('Logged out successfully', 'success');
   };
 
-  // ==================== TEAM FUNCTIONS ====================
-  const fetchTeams = async () => {
-    try {
-      const response = await axios.get('/teams/my-teams');
-      setTeams(response.data);
-    } catch (error) {
-      console.error('Fetch teams error:', error);
-      addToast('Failed to load teams', 'error');
-    }
-  };
-
-  const addTeam = async (team) => {
-    try {
-      setLoading(true);
-      const response = await axios.post('/teams', team);
-      setTeams([...teams, response.data]);
-      addToast('Team created successfully!');
-      return response.data;
-    } catch (error) {
-      const message = error.response?.data?.error || 'Failed to create team';
-      addToast(message, 'error');
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const updateTeam = async (teamId, updates) => {
-    try {
-      setLoading(true);
-      const response = await axios.put(`/teams/${teamId}`, updates);
-      setTeams(teams.map(team => team.id === teamId ? response.data : team));
-      addToast('Team updated successfully!');
-      return response.data;
-    } catch (error) {
-      const message = error.response?.data?.error || 'Failed to update team';
-      addToast(message, 'error');
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const deleteTeam = async (teamId) => {
-    try {
-      setLoading(true);
-      await axios.delete(`/teams/${teamId}`);
-      setTeams(teams.filter(team => team.id !== teamId));
-      // Update tasks that belonged to this team
-      setTasks(tasks.map(task => 
-        task.teamId === teamId ? { ...task, teamId: null, taskType: 'personal' } : task
-      ));
-      addToast('Team deleted successfully!', 'info');
-    } catch (error) {
-      const message = error.response?.data?.error || 'Failed to delete team';
-      addToast(message, 'error');
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ==================== TASK FUNCTIONS ====================
-  const fetchTasks = async (filters = {}) => {
-    try {
-      const params = new URLSearchParams(filters).toString();
-      const response = await axios.get(`/tasks?${params}`);
-      setTasks(response.data);
-    } catch (error) {
-      console.error('Fetch tasks error:', error);
-      addToast('Failed to load tasks', 'error');
-    }
-  };
-
+  // Task Management
   const addTask = async (task) => {
     try {
-      setLoading(true);
-      const response = await axios.post('/tasks', task);
+      const token = localStorage.getItem('campusToken');
+      const response = await axios.post(`${API_URL}/tasks`, task, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       setTasks([...tasks, response.data]);
-      addToast(`${task.taskType === 'team' ? 'Team' : 'Personal'} task created successfully!`);
-      return response.data;
+      addToast('Task created successfully', 'success');
     } catch (error) {
-      const message = error.response?.data?.error || 'Failed to create task';
-      addToast(message, 'error');
-      throw error;
-    } finally {
-      setLoading(false);
+      console.error('Error creating task:', error);
+      addToast('Failed to create task', 'error');
     }
   };
 
   const updateTask = async (taskId, updates) => {
     try {
-      const response = await axios.put(`/tasks/${taskId}`, updates);
-      setTasks(tasks.map(task => task.id === taskId ? response.data : task));
-      addToast('Task updated successfully!');
-      return response.data;
+      const token = localStorage.getItem('campusToken');
+      const response = await axios.put(`${API_URL}/tasks/${taskId}`, updates, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setTasks(tasks.map(t => t.id === taskId ? response.data : t));
+      addToast('Task updated', 'success');
     } catch (error) {
-      const message = error.response?.data?.error || 'Failed to update task';
-      addToast(message, 'error');
-      throw error;
+      console.error('Error updating task:', error);
+      addToast('Failed to update task', 'error');
     }
   };
 
   const deleteTask = async (taskId) => {
     try {
-      await axios.delete(`/tasks/${taskId}`);
-      setTasks(tasks.filter(task => task.id !== taskId));
-      addToast('Task deleted successfully!', 'info');
+      const token = localStorage.getItem('campusToken');
+      await axios.delete(`${API_URL}/tasks/${taskId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setTasks(tasks.filter(t => t.id !== taskId));
+      addToast('Task deleted', 'success');
     } catch (error) {
-      const message = error.response?.data?.error || 'Failed to delete task';
-      addToast(message, 'error');
-      throw error;
+      console.error('Error deleting task:', error);
+      addToast('Failed to delete task', 'error');
     }
   };
 
   const moveTask = async (taskId, newStatus) => {
-    return updateTask(taskId, { status: newStatus });
+    try {
+      const token = localStorage.getItem('campusToken');
+      const response = await axios.put(`${API_URL}/tasks/${taskId}`, 
+        { status: newStatus },
+        { headers: { Authorization: `Bearer ${token}` }}
+      );
+      setTasks(tasks.map(t => t.id === taskId ? response.data : t));
+    } catch (error) {
+      console.error('Error moving task:', error);
+      addToast('Failed to move task', 'error');
+    }
   };
 
-  const addComment = async (taskId, comment) => {
+  const duplicateTask = async (taskId) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (task) {
+      const newTask = {
+        ...task,
+        title: `${task.title} (Copy)`,
+        status: 'todo'
+      };
+      delete newTask.id;
+      await addTask(newTask);
+    }
+  };
+
+  const addComment = async (taskId, text) => {
     try {
-      const response = await axios.post(`/tasks/${taskId}/comments`, { text: comment });
-      setTasks(tasks.map(task => task.id === taskId ? response.data : task));
-      addToast('Comment added!');
-      return response.data;
+      const token = localStorage.getItem('campusToken');
+      const response = await axios.post(`${API_URL}/tasks/${taskId}/comments`, 
+        { text },
+        { headers: { Authorization: `Bearer ${token}` }}
+      );
+      setTasks(tasks.map(t => t.id === taskId ? response.data : t));
     } catch (error) {
-      const message = error.response?.data?.error || 'Failed to add comment';
-      addToast(message, 'error');
-      throw error;
+      console.error('Error adding comment:', error);
     }
   };
 
   const toggleSubtask = async (taskId, subtaskId) => {
     try {
-      const response = await axios.put(`/tasks/${taskId}/subtasks/${subtaskId}`);
-      setTasks(tasks.map(task => task.id === taskId ? response.data : task));
+      const token = localStorage.getItem('campusToken');
+      const response = await axios.put(`${API_URL}/tasks/${taskId}/subtasks/${subtaskId}`, 
+        {},
+        { headers: { Authorization: `Bearer ${token}` }}
+      );
+      setTasks(tasks.map(t => t.id === taskId ? response.data : t));
     } catch (error) {
-      const message = error.response?.data?.error || 'Failed to toggle subtask';
-      addToast(message, 'error');
-      throw error;
+      console.error('Error toggling subtask:', error);
     }
   };
 
-  const duplicateTask = async (taskId) => {
-    const taskToDuplicate = tasks.find(t => t.id === taskId);
-    if (taskToDuplicate) {
-      const newTask = {
-        ...taskToDuplicate,
-        title: `${taskToDuplicate.title} (Copy)`,
-        status: 'todo',
-        subtasks: taskToDuplicate.subtasks?.map(st => ({ ...st, completed: false })) || []
-      };
-      delete newTask.id;
-      delete newTask.comments;
-      
-      return addTask(newTask);
+  // Team Management
+  const addTeam = async (team) => {
+    try {
+      const token = localStorage.getItem('campusToken');
+      const response = await axios.post(`${API_URL}/teams`, team, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setTeams([...teams, response.data]);
+      addToast('Team created successfully', 'success');
+    } catch (error) {
+      console.error('Error creating team:', error);
+      addToast('Failed to create team', 'error');
     }
   };
 
-  // ==================== GETTER FUNCTIONS ====================
-  const getPersonalTasks = () => {
-    return tasks.filter(task => task.taskType === 'personal' && 
-      task.assignees?.some(a => a.id === currentUser?.id));
-  };
-
-  const getTeamTasks = (teamId = null) => {
-    if (teamId) {
-      return tasks.filter(task => task.teamId === teamId);
+  const updateTeam = async (teamId, updates) => {
+    try {
+      const token = localStorage.getItem('campusToken');
+      const response = await axios.put(`${API_URL}/teams/${teamId}`, updates, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setTeams(teams.map(t => t.id === teamId ? response.data : t));
+      addToast('Team updated', 'success');
+    } catch (error) {
+      console.error('Error updating team:', error);
+      addToast('Failed to update team', 'error');
     }
-    return tasks.filter(task => task.taskType === 'team');
   };
 
-  const getMyTasks = () => {
-    return tasks.filter(task => 
-      task.assignees?.some(a => a.id === currentUser?.id)
-    );
+  const deleteTeam = async (teamId) => {
+    try {
+      const token = localStorage.getItem('campusToken');
+      await axios.delete(`${API_URL}/teams/${teamId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setTeams(teams.filter(t => t.id !== teamId));
+      setTasks(tasks.map(t => t.teamId === teamId ? { ...t, taskType: 'personal', teamId: null } : t));
+      addToast('Team deleted', 'success');
+    } catch (error) {
+      console.error('Error deleting team:', error);
+      addToast('Failed to delete team', 'error');
+    }
   };
 
-  const getMyTeams = () => {
-    if (!currentUser) return [];
-    return teams.filter(team => 
-      team.members?.some(m => m.id === currentUser.id)
-    );
-  };
+  // Helpers
+  const getMyTeams = () => teams;
 
   const getAllTeamMembers = () => {
     const membersMap = new Map();
@@ -390,52 +269,75 @@ export const AppProvider = ({ children }) => {
     return Array.from(membersMap.values());
   };
 
+  const taskTemplates = [
+    {
+      name: 'Bug Fix',
+      description: 'Standard bug fix template',
+      priority: 'High',
+      tags: ['bug', 'urgent'],
+      subtasks: [
+        { text: 'Reproduce the bug', completed: false },
+        { text: 'Identify root cause', completed: false },
+        { text: 'Implement fix', completed: false },
+        { text: 'Test solution', completed: false }
+      ]
+    },
+    {
+      name: 'Feature Development',
+      description: 'New feature implementation',
+      priority: 'Medium',
+      tags: ['feature', 'development'],
+      subtasks: [
+        { text: 'Design feature', completed: false },
+        { text: 'Get approval', completed: false },
+        { text: 'Implement feature', completed: false },
+        { text: 'Write tests', completed: false },
+        { text: 'Documentation', completed: false }
+      ]
+    }
+  ];
+
+  // Toast Management
+  const addToast = (message, type = 'info') => {
+    const id = Date.now();
+    setToasts([...toasts, { id, message, type }]);
+    setTimeout(() => removeToast(id), 3000);
+  };
+
+  const removeToast = (id) => {
+    setToasts(toasts.filter(t => t.id !== id));
+  };
+
   const value = {
-    // Auth state
     currentUser,
-    token,
-    isAuthenticated: !!token,
-    
-    // Data state
+    isAuthenticated,
     tasks,
     teams,
-    loading,
     toasts,
-    taskTemplates,
-    
-    // Auth functions
-    register,
     login,
     logout,
-    setCurrentUser,
-    
-    // Task functions
-    fetchTasks,
     addTask,
     updateTask,
     deleteTask,
     moveTask,
+    duplicateTask,
     addComment,
     toggleSubtask,
-    duplicateTask,
-    
-    // Team functions
-    fetchTeams,
     addTeam,
     updateTeam,
     deleteTeam,
-    
-    // Getter functions
-    getPersonalTasks,
-    getTeamTasks,
-    getMyTasks,
     getMyTeams,
     getAllTeamMembers,
-    
-    // Toast functions
+    taskTemplates,
     addToast,
-    removeToast
+    removeToast,
+    fetchTasks,
+    fetchTeams
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
-};
+}
+
+export function useApp() {
+  return useContext(AppContext);
+}

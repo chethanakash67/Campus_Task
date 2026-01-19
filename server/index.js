@@ -1,5 +1,5 @@
-// server/index.js - FINAL MERGED VERSION
-// Combines full feature set (Teams, Tasks, Chat) with robust Error Handling & Auth flows
+// server/index.js - COMPLETE FIXED VERSION
+// Combines full feature set (Teams, Tasks, Chat) with DIRECT LOGIN
 
 const express = require('express');
 const cors = require('cors');
@@ -248,6 +248,73 @@ async function getCompleteTask(taskId) {
 
 // ==================== AUTH ROUTES ====================
 
+// DIRECT LOGIN (NO OTP) - PRIMARY LOGIN METHOD
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({ error: 'All fields required' });
+    }
+
+    // Find user
+    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    
+    if (result.rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid credentials' });
+    }
+
+    const user = result.rows[0];
+
+    // Verify password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ error: 'Invalid credentials' });
+    }
+
+    // Generate token
+    const token = jwt.sign(
+      { id: user.id, email: user.email }, 
+      process.env.JWT_SECRET || 'your_jwt_secret_key',
+      { expiresIn: '7d' }
+    );
+
+    // Return user data and token
+    res.json({ 
+      message: 'Login successful!', 
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar
+      },
+      token 
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get current user data
+app.get('/api/auth/me', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, name, email, avatar FROM users WHERE id = $1',
+      [req.user.id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Get user error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // Register - Step 1: Request OTP
 app.post('/api/auth/request-otp-register', async (req, res) => {
   try {
@@ -260,7 +327,6 @@ app.post('/api/auth/request-otp-register', async (req, res) => {
     const otp = generateOTP();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-    // Note: Ensure your DB has table 'otp_codes' OR 'otp_verifications' (Adjust table name if needed)
     await pool.query(
       'INSERT INTO otp_codes (email, otp_code, purpose, expires_at) VALUES ($1, $2, $3, $4)',
       [email, otp, 'register', expiresAt]
@@ -313,69 +379,6 @@ app.post('/api/auth/verify-register', async (req, res) => {
     res.json({ message: 'Registration successful!', user, token });
   } catch (error) {
     console.error('Verify register error:', error);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// Login - Step 1: Request OTP
-app.post('/api/auth/request-otp-login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    
-    if (result.rows.length === 0) return res.status(400).json({ error: 'Invalid credentials' });
-    const user = result.rows[0];
-
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ error: 'Invalid credentials' });
-
-    const otp = generateOTP();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-
-    await pool.query(
-      'INSERT INTO otp_codes (email, otp_code, purpose, expires_at) VALUES ($1, $2, $3, $4)',
-      [email, otp, 'login', expiresAt]
-    );
-
-    const emailSent = await sendOTPEmail(email, user.name, otp, 'login');
-    
-    if (!emailSent) {
-      return res.json({ 
-        message: 'OTP generated (Dev Mode)',
-        email,
-        devMode: true,
-        otp: process.env.NODE_ENV !== 'production' ? otp : undefined
-      });
-    }
-
-    res.json({ message: 'OTP sent to your email', email });
-  } catch (error) {
-    console.error('Login OTP error:', error);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// Login - Step 2: Verify OTP
-app.post('/api/auth/verify-login', async (req, res) => {
-  try {
-    const { email, otp } = req.body;
-
-    const otpResult = await pool.query(
-      'SELECT * FROM otp_codes WHERE email = $1 AND otp_code = $2 AND purpose = $3 AND is_verified = false AND expires_at > NOW() ORDER BY created_at DESC LIMIT 1',
-      [email, otp, 'login']
-    );
-
-    if (otpResult.rows.length === 0) return res.status(400).json({ error: 'Invalid or expired OTP' });
-
-    await pool.query('UPDATE otp_codes SET is_verified = true WHERE id = $1', [otpResult.rows[0].id]);
-
-    const userResult = await pool.query('SELECT id, name, email, avatar FROM users WHERE email = $1', [email]);
-    const user = userResult.rows[0];
-    const token = jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET || 'your_jwt_secret_key');
-
-    res.json({ message: 'Login successful!', user, token });
-  } catch (error) {
-    console.error('Verify login error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -579,7 +582,7 @@ app.post('/api/teams/accept-invitation', async (req, res) => {
   const client = await pool.connect();
   try {
     const { token, userId } = req.body;
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key'); // Ensure secret matches
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key');
     
     const invitation = await client.query(
       'SELECT * FROM team_invitations WHERE token = $1 AND status = $2 AND expires_at > NOW()',

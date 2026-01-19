@@ -1,4 +1,4 @@
-// client/src/App.jsx - UPDATED WITH NEW ROUTES
+// client/src/App.jsx - UPDATED ROUTES (No VerifyOTP for login)
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
@@ -9,7 +9,6 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
-import VerifyOTP from './pages/VerifyOTP';
 import AuthSuccess from './pages/AuthSuccess';
 import AcceptInvitation from './pages/AcceptInvitation';
 import AssignedTasks from './pages/AssignedTasks';
@@ -29,11 +28,10 @@ function App() {
           <Route path="/signup" element={<Signup />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/verify-otp" element={<VerifyOTP />} />
-<Route path="/auth-success" element={<AuthSuccess />} />
-<Route path="/accept-invitation" element={<AcceptInvitation />} />
-<Route path="/assigned-tasks" element={<AssignedTasks />} />
-<Route path="/teams/:teamId/chat" element={<TeamChat />} />
+          <Route path="/auth-success" element={<AuthSuccess />} />
+          <Route path="/accept-invitation" element={<AcceptInvitation />} />
+          <Route path="/assigned-tasks" element={<AssignedTasks />} />
+          <Route path="/teams/:teamId/chat" element={<TeamChat />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/teams" element={<Teams />} />
           <Route path="/calendar" element={<Calendar />} />
