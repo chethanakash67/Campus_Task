@@ -1,9 +1,10 @@
-// client/src/pages/Teams.jsx - ENHANCED WITH TASK CREATION
+// client/src/pages/Teams.jsx - ENHANCED WITH TASK CREATION AND CHAT
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Toast from '../components/Toast';
-import { FaPlus, FaTimes, FaTrash, FaEdit, FaUsers, FaTasks, FaChartLine } from 'react-icons/fa';
+// 1. Added FaComment to imports
+import { FaPlus, FaTimes, FaTrash, FaEdit, FaUsers, FaTasks, FaChartLine, FaComment } from 'react-icons/fa';
 import { useApp } from '../context/AppContext';
 import './Dashboard.css';
 
@@ -259,6 +260,15 @@ function Teams() {
                         </span>
                       </div>
                       <div className="team-actions">
+                        {/* 2. Added Team Chat Button */}
+                        <button 
+                          className="icon-btn" 
+                          onClick={() => navigate(`/teams/${team.id}/chat`)}
+                          title="Team Chat"
+                        >
+                          <FaComment />
+                        </button>
+                        
                         <button 
                           className="icon-btn" 
                           onClick={() => handleCreateTaskForTeam(team)}

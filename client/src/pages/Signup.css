@@ -201,3 +201,107 @@ body {
   color: var(--accent-hover); 
   text-decoration: underline; 
 }
+/* Add these styles to both Login.css and Signup.css */
+
+/* OTP Input Styling */
+.otp-input {
+    text-align: center;
+    font-size: 2rem;
+    letter-spacing: 0.5rem;
+    font-weight: bold;
+    padding: 15px;
+}
+
+/* OTP Info Box */
+.otp-info-box {
+    background: linear-gradient(135deg, rgba(100, 108, 255, 0.1), rgba(83, 91, 242, 0.05));
+    border: 2px solid rgba(100, 108, 255, 0.2);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    margin: 20px 0;
+}
+
+.otp-icon {
+    font-size: 3rem;
+    display: block;
+    margin-bottom: 10px;
+}
+
+.otp-info-box p {
+    color: #666;
+    font-size: 0.9rem;
+    margin: 0;
+}
+
+/* Countdown Timer */
+.countdown-timer {
+    text-align: center;
+    padding: 12px;
+    background: #fff3cd;
+    border-radius: 8px;
+    margin: 15px 0;
+    color: #856404;
+    font-size: 0.9rem;
+}
+
+.countdown-timer strong {
+    color: #ff6b6b;
+    font-weight: 700;
+}
+
+/* Resend Section */
+.resend-section {
+    text-align: center;
+    margin: 20px 0;
+}
+
+.resend-section p {
+    color: #888;
+    font-size: 0.9rem;
+    margin-bottom: 8px;
+}
+
+.btn-link {
+    background: none;
+    border: none;
+    color: #646cff;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.9rem;
+    text-decoration: underline;
+    padding: 5px 10px;
+    transition: color 0.2s;
+}
+
+.btn-link:hover:not(:disabled) {
+    color: #535bf2;
+}
+
+.btn-link:disabled {
+    color: #ccc;
+    cursor: not-allowed;
+    text-decoration: none;
+}
+
+/* Loading State */
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Success Animation */
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.auth-box {
+    animation: slideIn 0.3s ease-out;
+}

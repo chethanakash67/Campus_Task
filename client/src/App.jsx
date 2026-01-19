@@ -9,6 +9,11 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+import VerifyOTP from './pages/VerifyOTP';
+import AuthSuccess from './pages/AuthSuccess';
+import AcceptInvitation from './pages/AcceptInvitation';
+import AssignedTasks from './pages/AssignedTasks';
+import TeamChat from './pages/TeamChat';
 import Dashboard from './pages/Dashboard';
 import Teams from './pages/Teams';
 import Calendar from './pages/Calendar';
@@ -24,6 +29,11 @@ function App() {
           <Route path="/signup" element={<Signup />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/verify-otp" element={<VerifyOTP />} />
+<Route path="/auth-success" element={<AuthSuccess />} />
+<Route path="/accept-invitation" element={<AcceptInvitation />} />
+<Route path="/assigned-tasks" element={<AssignedTasks />} />
+<Route path="/teams/:teamId/chat" element={<TeamChat />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/teams" element={<Teams />} />
           <Route path="/calendar" element={<Calendar />} />

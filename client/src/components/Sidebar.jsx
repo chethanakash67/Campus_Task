@@ -42,6 +42,9 @@ function Sidebar() {
           <Link to="/teams" className={`nav-item ${isActive('/teams')}`}>
             <FaUserFriends className="nav-icon" /> My Teams
           </Link>
+          <Link to="/assigned-tasks" className={`nav-item ${isActive('/assigned-tasks')}`}>
+  <FaTasks className="nav-icon" /> Assigned Tasks
+</Link>
           
           <Link to="/calendar" className={`nav-item ${isActive('/calendar')}`}>
             <FaCalendarAlt className="nav-icon" /> Calendar
