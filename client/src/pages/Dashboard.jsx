@@ -1,4 +1,4 @@
-// client/src/pages/Dashboard.jsx - ENHANCED WITH PERSONAL & TEAM TASKS
+// client/src/pages/Dashboard.jsx - FIXED VERSION
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
@@ -31,19 +31,15 @@ function Dashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterPriority, setFilterPriority] = useState('all');
   const [filterAssignee, setFilterAssignee] = useState('all');
-  const [activeTab, setActiveTab] = useState('personal'); // 'personal' or 'team'
+  const [activeTab, setActiveTab] = useState('personal');
   const [selectedTeamFilter, setSelectedTeamFilter] = useState('all');
   
-  // Redirect to login if not authenticated (check after state initialization)
+  // Check authentication - FIXED
   useEffect(() => {
-    // Small delay to ensure state is loaded from localStorage
-    const timer = setTimeout(() => {
-      if (!isAuthenticated || !currentUser) {
-        navigate('/login', { replace: true });
-      }
-    }, 50);
-    
-    return () => clearTimeout(timer);
+    if (!isAuthenticated || !currentUser) {
+      console.log('Not authenticated, redirecting to login');
+      navigate('/login', { replace: true });
+    }
   }, [isAuthenticated, currentUser, navigate]);
 
   // New Task Form State
@@ -60,20 +56,9 @@ function Dashboard() {
     newTag: ""
   });
 
-  // Show loading or redirect if not authenticated
+  // Return early if not authenticated
   if (!isAuthenticated || !currentUser) {
-    return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '100vh',
-        fontSize: '1.2rem',
-        color: '#666'
-      }}>
-        Loading...
-      </div>
-    );
+    return null;
   }
 
   const myTeams = getMyTeams();

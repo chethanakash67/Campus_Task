@@ -744,10 +744,10 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
     });
 
     if (Object.keys(dbUpdates).length > 0) {
-        const setClause = Object.keys(dbUpdates).map((key, i) => `${key} = $${i + 1}`).join(', ');
+        const setClause = Object.keys(dbUpdates).map((key, i) => `${key} = ${i + 1}`).join(', ');
         const values = Object.values(dbUpdates);
         await pool.query(
-          `UPDATE tasks SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = $${values.length + 1}`,
+          `UPDATE tasks SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = ${values.length + 1}`,
           [...values, id]
         );
     }

@@ -1,11 +1,13 @@
-// client/src/pages/Login.jsx - FIXED DIRECT LOGIN
+// client/src/pages/Login.jsx - FIXED VERSION
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useApp } from '../context/AppContext';
 import axios from 'axios';
 import './Login.css';
 
 function Login() {
   const navigate = useNavigate();
+  const { login } = useApp();
   const [formData, setFormData] = useState({
     email: '',
     password: ''
@@ -40,11 +42,14 @@ function Login() {
         password: formData.password
       });
 
-      // Store token and user data
+      // Store token and user data immediately
       localStorage.setItem('campusToken', response.data.token);
       localStorage.setItem('campusUser', JSON.stringify(response.data.user));
 
-      // Redirect to dashboard
+      // Update context state
+      login(response.data.user, response.data.token);
+
+      // Navigate to dashboard
       navigate('/dashboard', { replace: true });
     } catch (err) {
       console.error('Login error:', err);
@@ -55,7 +60,7 @@ function Login() {
   };
 
   const handleGoogleLogin = () => {
-    window.location.href = `${API_URL}/auth/google`;
+    window.location.href = `${API_URL.replace('/api', '')}/api/auth/google`;
   };
 
   return (

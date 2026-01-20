@@ -1,12 +1,12 @@
-// client/src/components/Sidebar.jsx
+// client/src/components/Sidebar.jsx - FIXED VERSION
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-// Importing the icons you used
+// FIXED: Added missing FaTasks import
 import { MdDashboard, MdSettings } from 'react-icons/md';
-import { FaUserFriends, FaCalendarAlt } from 'react-icons/fa';
+import { FaUserFriends, FaCalendarAlt, FaTasks } from 'react-icons/fa';
 import { FiLogOut } from 'react-icons/fi';
-import '../pages/Dashboard.css'; // Ensure this points to your CSS
+import '../pages/Dashboard.css';
 
 function Sidebar() {
   const location = useLocation();
@@ -34,7 +34,6 @@ function Sidebar() {
         <div className="nav-section">
           <h4>MENU</h4>
           
-          {/* REAL LINKS using 'Link to=' instead of 'a href=' */}
           <Link to="/dashboard" className={`nav-item ${isActive('/dashboard')}`}>
             <MdDashboard className="nav-icon" /> Dashboard
           </Link>
@@ -42,9 +41,10 @@ function Sidebar() {
           <Link to="/teams" className={`nav-item ${isActive('/teams')}`}>
             <FaUserFriends className="nav-icon" /> My Teams
           </Link>
+          
           <Link to="/assigned-tasks" className={`nav-item ${isActive('/assigned-tasks')}`}>
-  <FaTasks className="nav-icon" /> Assigned Tasks
-</Link>
+            <FaTasks className="nav-icon" /> Assigned Tasks
+          </Link>
           
           <Link to="/calendar" className={`nav-item ${isActive('/calendar')}`}>
             <FaCalendarAlt className="nav-icon" /> Calendar
@@ -63,25 +63,25 @@ function Sidebar() {
       </nav>
 
       <div className="sidebar-footer">
-          <div className="user-profile">
-              <div className="avatar">{userInitials}</div>
-              <div className="user-info">
-                  <p className="user-name">{userName}</p>
-                  <button onClick={handleLogout} className="logout-link" style={{ 
-                    background: 'none', 
-                    border: 'none', 
-                    color: 'inherit', 
-                    cursor: 'pointer',
-                    padding: 0,
-                    fontSize: 'inherit',
-                    fontFamily: 'inherit',
-                    display: 'flex',
-                    alignItems: 'center'
-                  }}>
-                      <FiLogOut style={{ marginRight: '5px' }} /> Logout
-                  </button>
-              </div>
+        <div className="user-profile">
+          <div className="avatar">{userInitials}</div>
+          <div className="user-info">
+            <p className="user-name">{userName}</p>
+            <button onClick={handleLogout} className="logout-link" style={{ 
+              background: 'none', 
+              border: 'none', 
+              color: 'inherit', 
+              cursor: 'pointer',
+              padding: 0,
+              fontSize: 'inherit',
+              fontFamily: 'inherit',
+              display: 'flex',
+              alignItems: 'center'
+            }}>
+              <FiLogOut style={{ marginRight: '5px' }} /> Logout
+            </button>
           </div>
+        </div>
       </div>
     </aside>
   );
