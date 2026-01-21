@@ -2,6 +2,7 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import NotificationCenter from './NotificationCenter';
 // FIXED: Added missing FaTasks import
 import { MdDashboard, MdSettings } from 'react-icons/md';
 import { FaUserFriends, FaCalendarAlt, FaTasks } from 'react-icons/fa';
@@ -27,9 +28,9 @@ function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
-        <h3>CampusTasks</h3>
-      </div>
-      
+  <h3>CampusTasks</h3>
+  <NotificationCenter />
+</div>
       <nav className="sidebar-nav">
         <div className="nav-section">
           <h4>MENU</h4>

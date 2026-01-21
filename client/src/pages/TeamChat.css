@@ -620,3 +620,28 @@
     margin: 0;
   }
 }
+
+/* Invite Button in Sidebar */
+.invite-member-btn {
+  width: 100%;
+  padding: 10px;
+  background: rgba(100, 108, 255, 0.1);
+  border: 1px dashed rgba(100, 108, 255, 0.4);
+  color: var(--accent-color);
+  border-radius: 8px;
+  cursor: pointer;
+  margin-top: 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.invite-member-btn:hover {
+  background: rgba(100, 108, 255, 0.2);
+  border-color: var(--accent-color);
+  transform: translateY(-1px);
+}

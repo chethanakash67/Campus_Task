@@ -209,23 +209,27 @@ export const AppProvider = ({ children }) => {
   };
 
   // Update team
-  const updateTeam = async (teamId, teamData) => {
-    try {
-      const token = localStorage.getItem('campusToken');
-      await axios.put(`${API_URL}/teams/${teamId}`, teamData, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      setTeams(teams.map(team => 
-        team.id === teamId ? { ...team, ...teamData } : team
-      ));
-      addToast('Team updated!', 'success');
-    } catch (error) {
-      console.error('Error updating team:', error);
-      addToast('Failed to update team', 'error');
-    }
-  };
-
+const updateTeam = async (teamId, teamData) => {
+  try {
+    const token = localStorage.getItem('campusToken');
+    console.log('Updating team:', teamId, teamData); // Debug log
+    
+    const response = await axios.put(`${API_URL}/teams/${teamId}`, teamData, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    
+    console.log('Update response:', response.data); // Debug log
+    
+    // Refresh teams list from server
+    await fetchTeams(token);
+    addToast('Team updated!', 'success');
+  } catch (error) {
+    console.error('Error updating team:', error);
+    console.error('Error details:', error.response?.data); // More detailed error
+    addToast(error.response?.data?.error || 'Failed to update team', 'error');
+    throw error; // Re-throw to handle in component
+  }
+};
   // Delete team
   const deleteTeam = async (teamId) => {
     try {

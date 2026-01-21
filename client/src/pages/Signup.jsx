@@ -23,6 +23,13 @@ function Signup() {
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
+  // Pre-fill email if coming from invitation
+useEffect(() => {
+  const invitationEmail = localStorage.getItem('invitationEmail');
+  if (invitationEmail) {
+    setFormData(prev => ({ ...prev, email: invitationEmail }));
+  }
+}, []);
   // Countdown timer
   useEffect(() => {
     if (timerActive && countdown > 0) {
@@ -134,10 +141,38 @@ function Signup() {
       localStorage.setItem('campusToken', response.data.token);
       localStorage.setItem('campusUser', JSON.stringify(response.data.user));
 
-      setMessage('Registration successful! Redirecting...');
-      setTimeout(() => {
-        navigate('/dashboard', { replace: true });
-      }, 1000);
+      // Check for pending invitation
+      const pendingInvitation = localStorage.getItem('pendingInvitation');
+      
+      if (pendingInvitation) {
+        setMessage('Account created! Accepting team invitation...');
+        
+        try {
+          // Accept the invitation
+          await axios.post(`${API_URL}/teams/accept-invitation`, 
+            { token: pendingInvitation, userId: response.data.user.id },
+            { headers: { Authorization: `Bearer ${response.data.token}` }}
+          );
+          
+          // Clear pending invitation
+          localStorage.removeItem('pendingInvitation');
+          localStorage.removeItem('invitationEmail');
+          
+          setTimeout(() => {
+            navigate('/teams', { replace: true });
+          }, 1500);
+        } catch (inviteError) {
+          console.error('Error accepting invitation:', inviteError);
+          setTimeout(() => {
+            navigate('/dashboard', { replace: true });
+          }, 1000);
+        }
+      } else {
+        setMessage('Registration successful! Redirecting...');
+        setTimeout(() => {
+          navigate('/dashboard', { replace: true });
+        }, 1000);
+      }
     } catch (err) {
       console.error('OTP verification error:', err);
       setError(err.response?.data?.error || 'Invalid OTP. Please try again.');
@@ -304,7 +339,13 @@ function Signup() {
         </div>
 
         <h2>Create Account</h2>
-        <p className="auth-subtitle">Join CampusTasks today</p>
+{localStorage.getItem('pendingInvitation') ? (
+  <p className="auth-subtitle" style={{ color: '#646cff' }}>
+    ✨ Complete signup to join the team
+  </p>
+) : (
+  <p className="auth-subtitle">Join CampusTasks today</p>
+)}
 
         <button className="btn-google" onClick={handleGoogleSignup} type="button">
           <img

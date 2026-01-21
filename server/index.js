@@ -245,7 +245,17 @@ async function getCompleteTask(taskId) {
 
   return result.rows[0];
 }
-
+// Helper function to create notification (should be with other helpers)
+async function createNotification(userId, type, title, message, link = null, metadata = {}) {
+  try {
+    await pool.query(
+      'INSERT INTO notifications (user_id, type, title, message, link, metadata) VALUES ($1, $2, $3, $4, $5, $6)',
+      [userId, type, title, message, link, JSON.stringify(metadata)]
+    );
+  } catch (error) {
+    console.error('Error creating notification:', error);
+  }
+}
 // ==================== AUTH ROUTES ====================
 
 // DIRECT LOGIN (NO OTP) - PRIMARY LOGIN METHOD
@@ -333,6 +343,131 @@ app.post('/api/auth/request-otp-register', async (req, res) => {
     );
 
     const emailSent = await sendOTPEmail(email, name, otp, 'register');
+    // Update team
+app.put('/api/teams/:id', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { id } = req.params;
+    const { name, description, color, members } = req.body;
+
+    // Update team details
+    await client.query(
+      'UPDATE teams SET name = $1, description = $2, color = $3, updated_at = NOW() WHERE id = $4',
+      [name, description, color, id]
+    );
+
+    // Get current team members
+    const currentMembers = await client.query(
+      'SELECT user_id FROM team_members WHERE team_id = $1',
+      [id]
+    );
+    const currentMemberIds = currentMembers.rows.map(m => m.user_id);
+
+    // Handle new member invitations
+    if (members && members.length > 0) {
+      for (const member of members) {
+        // Check if member already exists in team
+        const memberExists = currentMemberIds.includes(member.id);
+        
+        if (!memberExists) {
+          // Send invitation for new members
+          const token = jwt.sign(
+            { teamId: parseInt(id), email: member.email }, 
+            process.env.JWT_SECRET || 'secret', 
+            { expiresIn: '7d' }
+          );
+          const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+          // Check if user exists
+          const userCheck = await client.query('SELECT id FROM users WHERE email = $1', [member.email]);
+          
+          if (userCheck.rows.length > 0) {
+            // User exists - add to team directly and create notification
+            const userId = userCheck.rows[0].id;
+            await client.query(
+              'INSERT INTO team_members (team_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+              [id, userId, member.role || 'Member']
+            );
+            
+            await createNotification(
+              userId,
+              'team_invite',
+              'Added to Team',
+              `You've been added to "${name}"`,
+              `/teams`,
+              { teamId: id, teamName: name }
+            );
+          } else {
+            // User doesn't exist - send invitation email
+            await client.query(
+              'INSERT INTO team_invitations (team_id, inviter_id, invitee_email, invitee_name, role, token, expires_at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+              [id, req.user.id, member.email, member.name, member.role || 'Member', token, expiresAt]
+            );
+
+            if (transporter && emailConfigured) {
+              const team = await client.query('SELECT name FROM teams WHERE id = $1', [id]);
+              const inviter = await client.query('SELECT name FROM users WHERE id = $1', [req.user.id]);
+              
+              await transporter.sendMail({
+                from: process.env.EMAIL_USER,
+                to: member.email,
+                subject: `Join "${team.rows[0].name}" on CampusTasks`,
+                html: `
+                  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <h2>🎉 You're Invited to Join a Team!</h2>
+                    <p><strong>${inviter.rows[0].name}</strong> has invited you to join the team:</p>
+                    <div style="background: #f4f4f4; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                      <h3 style="margin: 0; color: #646cff;">${team.rows[0].name}</h3>
+                      <p style="margin: 10px 0 0 0;">Role: <strong>${member.role || 'Member'}</strong></p>
+                    </div>
+                    <p>Click the button below to accept the invitation:</p>
+                    <a href="${FRONTEND_URL}/accept-invitation?token=${token}" 
+                       style="display: inline-block; background: #646cff; color: white; padding: 12px 30px; 
+                              text-decoration: none; border-radius: 6px; margin: 20px 0;">
+                      Accept Invitation
+                    </a>
+                    <p style="color: #666; font-size: 0.9em;">
+                      Don't have an account? Don't worry! You'll be able to sign up when you accept the invitation.
+                    </p>
+                    <p style="color: #999; font-size: 0.8em;">
+                      This invitation expires in 7 days.
+                    </p>
+                  </div>
+                `
+              });
+              console.log(`✅ Invitation email sent to ${member.email}`);
+            }
+          }
+        }
+      }
+    }
+
+    await client.query('COMMIT');
+    
+    // Fetch updated team
+    const result = await client.query(`
+      SELECT t.*, 
+        COALESCE(
+          json_agg(
+            json_build_object('id', u.id, 'name', u.name, 'role', tm.role, 'email', u.email)
+          ) FILTER (WHERE u.id IS NOT NULL), '[]'
+        ) as members
+      FROM teams t
+      LEFT JOIN team_members tm ON t.id = tm.team_id
+      LEFT JOIN users u ON tm.user_id = u.id
+      WHERE t.id = $1 GROUP BY t.id
+    `, [id]);
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Update team error:', error);
+    res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
+  }
+});
     
     // In dev mode, return OTP in response if email fails
     if (!emailSent) {
@@ -520,7 +655,7 @@ app.post('/api/teams', authenticateToken, async (req, res) => {
       [team.id, req.user.id, 'Lead']
     );
 
-    // Send invitations
+    // Send invitations and Notifications
     if (members && members.length > 0) {
       for (const member of members) {
         const token = jwt.sign({ teamId: team.id, email: member.email }, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
@@ -530,6 +665,19 @@ app.post('/api/teams', authenticateToken, async (req, res) => {
           'INSERT INTO team_invitations (team_id, inviter_id, invitee_email, invitee_name, role, token, expires_at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
           [team.id, req.user.id, member.email, member.name, member.role || 'Member', token, expiresAt]
         );
+
+        // Check if user exists and create notification
+        const existingUser = await client.query('SELECT id FROM users WHERE email = $1', [member.email]);
+        if (existingUser.rows.length > 0) {
+          await createNotification(
+            existingUser.rows[0].id,
+            'team_invite',
+            'New Team Invitation',
+            `${req.user.name} invited you to join "${team.name}"`,
+            `/accept-invitation?token=${token}`,
+            { teamId: team.id, teamName: team.name }
+          );
+        }
 
         if (transporter && emailConfigured) {
           try {
@@ -608,25 +756,239 @@ app.post('/api/teams/accept-invitation', async (req, res) => {
   }
 });
 
-// Get invitation details
+// Get pending invitations for a user
+app.get('/api/invitations/pending', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT ti.*, t.name as team_name, t.color, u.name as inviter_name
+      FROM team_invitations ti
+      JOIN teams t ON ti.team_id = t.id
+      LEFT JOIN users u ON ti.inviter_id = u.id
+      WHERE ti.invitee_email = $1 AND ti.status = 'pending' AND ti.expires_at > NOW()
+      ORDER BY ti.created_at DESC
+    `, [req.user.email]);
+    
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Decline invitation
+app.post('/api/teams/decline-invitation', authenticateToken, async (req, res) => {
+  try {
+    const { token } = req.body;
+    await pool.query(
+      'UPDATE team_invitations SET status = $1, updated_at = NOW() WHERE token = $2',
+      ['rejected', token]
+    );
+    res.json({ message: 'Invitation declined' });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get invitation details - UPDATED
 app.get('/api/teams/invitation/:token', async (req, res) => {
   try {
     const { token } = req.params;
     const result = await pool.query(`
-      SELECT ti.*, t.name as team_name, u.name as inviter_name
+      SELECT ti.*, 
+        t.name as team_name,
+        t.description as team_description,
+        t.color as team_color,
+        u.name as inviter_name,
+        (SELECT COUNT(*) FROM team_members WHERE team_id = t.id) as member_count,
+        (SELECT COUNT(*) FROM tasks WHERE team_id = t.id AND status != 'done') as task_count
       FROM team_invitations ti
       JOIN teams t ON ti.team_id = t.id
       LEFT JOIN users u ON ti.inviter_id = u.id
       WHERE ti.token = $1 AND ti.status = 'pending' AND ti.expires_at > NOW()
     `, [token]);
 
-    if (result.rows.length === 0) return res.status(404).json({ error: 'Invitation invalid' });
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Invitation invalid or expired' });
     res.json(result.rows[0]);
   } catch (error) {
+    console.error('Error fetching invitation:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
+// Update team - ADD THIS BEFORE THE DELETE ROUTE
+app.put('/api/teams/:id', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { id } = req.params;
+    const { name, description, color, members } = req.body;
+
+    console.log('Updating team:', id, { name, description, color, memberCount: members?.length }); // Debug
+
+    // First verify team exists and user has access
+    const teamCheck = await client.query(
+      'SELECT * FROM teams WHERE id = $1',
+      [id]
+    );
+
+    if (teamCheck.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Team not found' });
+    }
+
+    // Update team basic info
+    await client.query(
+      'UPDATE teams SET name = $1, description = $2, color = $3, updated_at = NOW() WHERE id = $4',
+      [name, description || '', color || 'purple', id]
+    );
+
+    console.log('Team basic info updated'); // Debug
+
+    // Get current team members
+    const currentMembers = await client.query(
+      'SELECT tm.user_id, u.email FROM team_members tm JOIN users u ON tm.user_id = u.id WHERE tm.team_id = $1',
+      [id]
+    );
+    const currentMemberEmails = currentMembers.rows.map(m => m.email);
+
+    console.log('Current members:', currentMemberEmails); // Debug
+
+    // Process new members
+    if (members && members.length > 0) {
+      for (const member of members) {
+        // Skip if member already in team
+        if (currentMemberEmails.includes(member.email)) {
+          console.log('Member already exists:', member.email); // Debug
+          continue;
+        }
+
+        console.log('Processing new member:', member.email); // Debug
+
+        // Check if user exists in database
+        const userCheck = await client.query(
+          'SELECT id, name FROM users WHERE email = $1',
+          [member.email]
+        );
+
+        if (userCheck.rows.length > 0) {
+          // User exists - add directly to team
+          const userId = userCheck.rows[0].id;
+          await client.query(
+            'INSERT INTO team_members (team_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+            [id, userId, member.role || 'Member']
+          );
+
+          console.log('Added existing user to team:', userCheck.rows[0].name); // Debug
+
+          // Create notification
+          await client.query(
+            'INSERT INTO notifications (user_id, type, title, message, link, metadata) VALUES ($1, $2, $3, $4, $5, $6)',
+            [userId, 'team_invite', 'Added to Team', `You've been added to "${name}"`, '/teams', JSON.stringify({ teamId: id, teamName: name })]
+          );
+        } else {
+          // User doesn't exist - send invitation
+          const token = jwt.sign(
+            { teamId: parseInt(id), email: member.email },
+            process.env.JWT_SECRET || 'your_jwt_secret_key',
+            { expiresIn: '7d' }
+          );
+          const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+          await client.query(
+            'INSERT INTO team_invitations (team_id, inviter_id, invitee_email, invitee_name, role, token, expires_at, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+            [id, req.user.id, member.email, member.name, member.role || 'Member', token, expiresAt, 'pending']
+          );
+
+          console.log('Created invitation for:', member.email); // Debug
+
+          // Send email if configured
+          if (transporter && emailConfigured) {
+            try {
+              const inviter = await client.query('SELECT name FROM users WHERE id = $1', [req.user.id]);
+
+              await transporter.sendMail({
+                from: process.env.EMAIL_USER,
+                to: member.email,
+                subject: `Join "${name}" on CampusTasks`,
+                html: `
+                  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+                    <div style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                      <h2 style="color: #646cff; margin-top: 0;">🎉 You're Invited to Join a Team!</h2>
+                      <p style="font-size: 16px; color: #333;">
+                        <strong>${inviter.rows[0].name}</strong> has invited you to join the team:
+                      </p>
+                      <div style="background: #f4f4f4; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #646cff;">
+                        <h3 style="margin: 0; color: #646cff; font-size: 24px;">${name}</h3>
+                        <p style="margin: 10px 0 0 0; color: #666;">Role: <strong>${member.role || 'Member'}</strong></p>
+                      </div>
+                      <p style="color: #666;">Click the button below to accept the invitation:</p>
+                      <div style="text-align: center; margin: 30px 0;">
+                        <a href="${FRONTEND_URL}/accept-invitation?token=${token}" 
+                           style="display: inline-block; background: #646cff; color: white; padding: 14px 40px; 
+                                  text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+                          Accept Invitation
+                        </a>
+                      </div>
+                      <div style="background: #fffbea; padding: 15px; border-radius: 6px; margin-top: 20px; border: 1px solid #ffd700;">
+                        <p style="margin: 0; color: #856404; font-size: 14px;">
+                          <strong>📝 Note:</strong> Don't have an account? No problem! You'll be able to create one when you accept the invitation.
+                        </p>
+                      </div>
+                      <p style="color: #999; font-size: 13px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+                        This invitation expires in 7 days.<br>
+                        If you didn't expect this invitation, you can safely ignore this email.
+                      </p>
+                    </div>
+                  </div>
+                `
+              });
+              console.log(`✅ Invitation email sent to ${member.email}`);
+            } catch (emailError) {
+              console.error('Email error:', emailError);
+              // Don't fail the whole operation if email fails
+            }
+          } else {
+            console.log(`⚠️ Email not configured. Invitation created but not sent to ${member.email}`);
+          }
+        }
+      }
+    }
+
+    await client.query('COMMIT');
+    console.log('Transaction committed'); // Debug
+
+    // Fetch and return updated team
+    const result = await client.query(`
+      SELECT t.*, 
+        COALESCE(
+          json_agg(
+            json_build_object(
+              'id', u.id, 
+              'name', u.name, 
+              'role', tm.role, 
+              'email', u.email
+            )
+          ) FILTER (WHERE u.id IS NOT NULL), '[]'
+        ) as members
+      FROM teams t
+      LEFT JOIN team_members tm ON t.id = tm.team_id
+      LEFT JOIN users u ON tm.user_id = u.id
+      WHERE t.id = $1 
+      GROUP BY t.id
+    `, [id]);
+
+    console.log('Returning updated team with', result.rows[0].members.length, 'members'); // Debug
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Update team error:', error);
+    console.error('Error stack:', error.stack); // More detailed error
+    res.status(500).json({ error: error.message || 'Failed to update team' });
+  } finally {
+    client.release();
+  }
+});
+// Delete team
 app.delete('/api/teams/:id', authenticateToken, async (req, res) => {
   try {
     await pool.query('DELETE FROM teams WHERE id = $1', [req.params.id]);
@@ -887,6 +1249,73 @@ app.get('/api/chat/unread', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 });
+// ==================== NOTIFICATION ROUTES ====================
+
+// Get user notifications
+app.get('/api/notifications', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT * FROM notifications 
+      WHERE user_id = $1 
+      ORDER BY created_at DESC 
+      LIMIT 50
+    `, [req.user.id]);
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get unread count
+app.get('/api/notifications/unread-count', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT COUNT(*) as count FROM notifications WHERE user_id = $1 AND is_read = false',
+      [req.user.id]
+    );
+    res.json({ count: parseInt(result.rows[0].count) });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Mark notification as read
+app.put('/api/notifications/:id/read', authenticateToken, async (req, res) => {
+  try {
+    await pool.query(
+      'UPDATE notifications SET is_read = true WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.user.id]
+    );
+    res.json({ message: 'Marked as read' });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Mark all as read
+app.put('/api/notifications/mark-all-read', authenticateToken, async (req, res) => {
+  try {
+    await pool.query(
+      'UPDATE notifications SET is_read = true WHERE user_id = $1',
+      [req.user.id]
+    );
+    res.json({ message: 'All marked as read' });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Helper function to create notification (add near other helper functions)
+async function createNotification(userId, type, title, message, link = null, metadata = {}) {
+  try {
+    await pool.query(
+      'INSERT INTO notifications (user_id, type, title, message, link, metadata) VALUES ($1, $2, $3, $4, $5, $6)',
+      [userId, type, title, message, link, JSON.stringify(metadata)]
+    );
+  } catch (error) {
+    console.error('Error creating notification:', error);
+  }
+}
 
 // ==================== HEALTH & SERVER ====================
 app.get('/health', (req, res) => {

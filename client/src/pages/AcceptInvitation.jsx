@@ -34,30 +34,53 @@ function AcceptInvitation() {
         }
     }, [token]);
 
-    const handleAccept = async () => {
-        try {
-            setAccepting(true);
-            const currentUser = JSON.parse(localStorage.getItem('campusUser') || '{}');
-            
-            if (!currentUser.id) {
-                // Redirect to signup/login
-                localStorage.setItem('pendingInvitation', token);
-                navigate('/signup');
-                return;
-            }
+   const handleAccept = async () => {
+    try {
+        setAccepting(true);
+        const currentUser = JSON.parse(localStorage.getItem('campusUser') || '{}');
+        
+        if (!currentUser.id) {
+            // User not logged in - store invitation and redirect to signup
+            localStorage.setItem('pendingInvitation', token);
+            localStorage.setItem('invitationEmail', invitation.invitee_email);
+            navigate('/signup?from=invitation');
+            return;
+        }
 
+        // User is logged in - accept invitation
+        const authToken = localStorage.getItem('campusToken');
+        await axios.post(`${API_URL}/teams/accept-invitation`, 
+            { token, userId: currentUser.id },
+            { headers: { Authorization: `Bearer ${authToken}` }}
+        );
+        
+        alert('✅ Successfully joined the team!');
+        navigate('/teams');
+    } catch (err) {
+        setError(err.response?.data?.error || 'Failed to accept invitation');
+    } finally {
+        setAccepting(false);
+    }
+};
+
+    // Updated handleDecline with API call
+    const handleDecline = async () => {
+        try {
             const authToken = localStorage.getItem('campusToken');
-            await axios.post(`${API_URL}/teams/accept-invitation`, 
-                { token, userId: currentUser.id },
-                { headers: { Authorization: `Bearer ${authToken}` }}
-            );
-            
-            alert('Successfully joined the team!');
-            navigate('/teams');
+            // We only try to notify the server if the user is logged in
+            if (authToken) {
+                await axios.post(`${API_URL}/teams/decline-invitation`, 
+                    { token },
+                    { headers: { Authorization: `Bearer ${authToken}` }}
+                );
+            }
+            alert('Invitation declined');
+            navigate('/dashboard');
         } catch (err) {
-            setError(err.response?.data?.error || 'Failed to accept invitation');
-        } finally {
-            setAccepting(false);
+            console.error("Error declining:", err);
+            // Even if the API call fails, we likely still want to exit this screen,
+            // but setting error lets the user know something went wrong.
+            setError('Failed to decline invitation');
         }
     };
 
@@ -89,29 +112,49 @@ function AcceptInvitation() {
         <div className="auth-container">
             <div className="auth-box">
                 <h2>Team Invitation</h2>
-                <div style={{ marginBottom: '20px' }}>
-                    <p><strong>{invitation.inviter_name}</strong> has invited you to join:</p>
-                    <h3 style={{ color: '#646cff', margin: '10px 0' }}>
-                        {invitation.team_name}
-                    </h3>
-                    <p>Role: <strong>{invitation.role}</strong></p>
-                </div>
                 
-                <button 
-                    className="btn btn-full" 
-                    onClick={handleAccept}
-                    disabled={accepting}
-                >
-                    {accepting ? 'Accepting...' : 'Accept Invitation'}
-                </button>
-                
-                <button 
-                    className="btn btn-secondary" 
-                    style={{ marginTop: '10px', width: '100%' }}
-                    onClick={() => navigate('/')}
-                >
-                    Decline
-                </button>
+                {invitation && (
+                    <>
+                        <div style={{ marginBottom: '20px' }}>
+                            <p><strong>{invitation.inviter_name}</strong> has invited you to join:</p>
+                            <h3 style={{ color: '#646cff', margin: '10px 0', fontSize: '1.5em' }}>
+                                {invitation.team_name}
+                            </h3>
+                            <p>Role: <strong>{invitation.role}</strong></p>
+                            
+                            {invitation.team_description && (
+                                <p className="team-description">{invitation.team_description}</p>
+                            )}
+                            
+                            <div className="invitation-stats">
+                                <div className="stat-item">
+                                    <span className="stat-icon">👥</span>
+                                    <span>{invitation.member_count || 0} members</span>
+                                </div>
+                                <div className="stat-item">
+                                    <span className="stat-icon">📋</span>
+                                    <span>{invitation.task_count || 0} active tasks</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button 
+                            className="btn btn-full" 
+                            onClick={handleAccept}
+                            disabled={accepting}
+                        >
+                            {accepting ? 'Accepting...' : '✅ Accept Invitation'}
+                        </button>
+                        
+                        <button 
+                            className="btn btn-secondary" 
+                            style={{ marginTop: '10px', width: '100%' }}
+                            onClick={handleDecline}
+                        >
+                            ❌ Decline
+                        </button>
+                    </>
+                )}
             </div>
         </div>
     );

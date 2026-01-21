@@ -169,3 +169,18 @@ CREATE INDEX IF NOT EXISTS idx_direct_messages_sender ON direct_messages(sender_
 CREATE INDEX IF NOT EXISTS idx_direct_messages_receiver ON direct_messages(receiver_id);
 CREATE INDEX IF NOT EXISTS idx_team_invitations_token ON team_invitations(token);
 CREATE INDEX IF NOT EXISTS idx_otp_user_id ON otp_verifications(user_id);
+-- Add at the end of schema.sql
+CREATE TABLE IF NOT EXISTS notifications (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    type VARCHAR(50) NOT NULL, -- 'team_invite', 'task_assigned', 'task_comment', 'task_due_soon', 'mention'
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    link VARCHAR(500),
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    metadata JSONB -- Store additional data like team_id, task_id, etc.
+);
+
+CREATE INDEX idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX idx_notifications_is_read ON notifications(is_read);

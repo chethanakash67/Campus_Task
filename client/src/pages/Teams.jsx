@@ -109,18 +109,27 @@ function Teams() {
     });
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!newTeam.name.trim()) return;
+  const handleSubmit = async (e) => {
+  e.preventDefault();
+  if (!newTeam.name.trim()) {
+    addToast('Team name is required', 'error');
+    return;
+  }
 
+  try {
     if (editingTeam) {
-      updateTeam(editingTeam.id, newTeam);
+      console.log('Submitting team update:', editingTeam.id, newTeam); // Debug
+      await updateTeam(editingTeam.id, newTeam);
+      resetForm();
     } else {
-      addTeam(newTeam);
+      await addTeam(newTeam);
+      resetForm();
     }
-    
-    resetForm();
-  };
+  } catch (error) {
+    console.error('Submit error:', error);
+    // Don't reset form on error so user can try again
+  }
+};
 
   const resetForm = () => {
     setShowModal(false);
@@ -135,10 +144,15 @@ function Teams() {
   };
 
   const handleEdit = (team) => {
-    setEditingTeam(team);
-    setNewTeam(team);
-    setShowModal(true);
-  };
+  setEditingTeam(team);
+  setNewTeam({
+    name: team.name,
+    description: team.description,
+    color: team.color,
+    members: team.members || []
+  });
+  setShowModal(true);
+};
 
   const handleDelete = (teamId) => {
     if (window.confirm('Are you sure you want to delete this team? Team tasks will become personal tasks.')) {
