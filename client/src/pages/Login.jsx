@@ -1,5 +1,5 @@
 // client/src/pages/Login.jsx - FIXED VERSION
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import axios from 'axios';
@@ -16,6 +16,14 @@ function Login() {
   const [loading, setLoading] = useState(false);
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+
+  // Pre-fill email if coming from invitation
+  useEffect(() => {
+    const invitationEmail = localStorage.getItem('invitationEmail');
+    if (invitationEmail) {
+      setFormData(prev => ({ ...prev, email: invitationEmail }));
+    }
+  }, []);
 
   const handleChange = (e) => {
     setFormData({
@@ -49,8 +57,48 @@ function Login() {
       // Update context state
       login(response.data.user, response.data.token);
 
-      // Navigate to dashboard
-      navigate('/dashboard', { replace: true });
+      // Check for pending invitation
+      const pendingInvitation = localStorage.getItem('pendingInvitation');
+      if (pendingInvitation) {
+        try {
+          // Accept the invitation
+          const inviteResponse = await axios.post(`${API_URL}/teams/accept-invitation`, 
+            { token: pendingInvitation, userId: response.data.user.id },
+            { headers: { Authorization: `Bearer ${response.data.token}` }}
+          );
+          
+          // Clear pending invitation
+          localStorage.removeItem('pendingInvitation');
+          localStorage.removeItem('invitationEmail');
+          
+          // Show appropriate message
+          if (inviteResponse.data.alreadyMember) {
+            alert('ℹ️ ' + inviteResponse.data.message);
+          } else {
+            alert('✅ ' + inviteResponse.data.message);
+          }
+          
+          navigate('/teams', { replace: true });
+        } catch (inviteError) {
+          console.error('Error accepting invitation:', inviteError);
+          const errorMsg = inviteError.response?.data?.error || 'Failed to accept invitation';
+          // If email mismatch, clear invitation and go to dashboard
+          if (errorMsg.includes('different email')) {
+            localStorage.removeItem('pendingInvitation');
+            localStorage.removeItem('invitationEmail');
+            alert('⚠️ ' + errorMsg + '\n\nYou can accept the invitation with the correct email account.');
+            navigate('/dashboard', { replace: true });
+          } else {
+            // Other errors - still clear and go to dashboard
+            localStorage.removeItem('pendingInvitation');
+            localStorage.removeItem('invitationEmail');
+            navigate('/dashboard', { replace: true });
+          }
+        }
+      } else {
+        // No pending invitation - navigate to dashboard
+        navigate('/dashboard', { replace: true });
+      }
     } catch (err) {
       console.error('Login error:', err);
       setError(err.response?.data?.error || 'Login failed. Please check your credentials.');
@@ -72,7 +120,13 @@ function Login() {
         </div>
 
         <h2>Welcome Back</h2>
-        <p className="auth-subtitle">Sign in to your account</p>
+        {localStorage.getItem('pendingInvitation') ? (
+          <p className="auth-subtitle" style={{ color: '#646cff' }}>
+            ✨ Sign in to accept the team invitation
+          </p>
+        ) : (
+          <p className="auth-subtitle">Sign in to your account</p>
+        )}
 
         <button className="btn-google" onClick={handleGoogleLogin} type="button">
           <img 

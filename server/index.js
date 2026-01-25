@@ -730,26 +730,85 @@ app.post('/api/teams/accept-invitation', async (req, res) => {
   const client = await pool.connect();
   try {
     const { token, userId } = req.body;
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key');
     
+    // Validate token format
+    try {
+      jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key');
+    } catch (jwtError) {
+      return res.status(400).json({ error: 'Invalid invitation token' });
+    }
+    
+    // Fetch invitation
     const invitation = await client.query(
       'SELECT * FROM team_invitations WHERE token = $1 AND status = $2 AND expires_at > NOW()',
       [token, 'pending']
     );
 
-    if (invitation.rows.length === 0) return res.status(400).json({ error: 'Invalid invitation' });
+    if (invitation.rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid or expired invitation' });
+    }
 
-    await client.query('BEGIN');
-    await client.query(
-      'INSERT INTO team_members (team_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
-      [invitation.rows[0].team_id, userId, invitation.rows[0].role]
+    const invite = invitation.rows[0];
+
+    // Validate user exists
+    const userCheck = await client.query('SELECT id, email FROM users WHERE id = $1', [userId]);
+    if (userCheck.rows.length === 0) {
+      return res.status(400).json({ error: 'User not found' });
+    }
+
+    const user = userCheck.rows[0];
+
+    // Validate user email matches invitation email
+    if (user.email.toLowerCase() !== invite.invitee_email.toLowerCase()) {
+      return res.status(403).json({ 
+        error: 'This invitation is for a different email address. Please use the account that matches the invitation email.' 
+      });
+    }
+
+    // Check if user is already a team member (DB is source of truth)
+    const existingMember = await client.query(
+      'SELECT id FROM team_members WHERE team_id = $1 AND user_id = $2',
+      [invite.team_id, userId]
     );
-    await client.query('UPDATE team_invitations SET status = $1, updated_at = NOW() WHERE id = $2', ['accepted', invitation.rows[0].id]);
-    await client.query('COMMIT');
 
-    res.json({ message: 'Successfully joined the team!' });
+    if (existingMember.rows.length > 0) {
+      // User is already a member - mark invitation as accepted if still pending
+      if (invite.status === 'pending') {
+        await client.query(
+          'UPDATE team_invitations SET status = $1, updated_at = NOW() WHERE id = $2',
+          ['accepted', invite.id]
+        );
+      }
+      return res.status(200).json({ 
+        message: 'You are already a member of this team',
+        alreadyMember: true
+      });
+    }
+
+    // User is not a member - proceed with insertion
+    await client.query('BEGIN');
+    
+    // Insert into team_members
+    const insertResult = await client.query(
+      'INSERT INTO team_members (team_id, user_id, role) VALUES ($1, $2, $3) RETURNING id',
+      [invite.team_id, userId, invite.role]
+    );
+
+    // Only mark invitation as accepted if insert was successful
+    if (insertResult.rows.length > 0) {
+      await client.query(
+        'UPDATE team_invitations SET status = $1, updated_at = NOW() WHERE id = $2',
+        ['accepted', invite.id]
+      );
+      await client.query('COMMIT');
+      res.json({ message: 'Successfully joined the team!' });
+    } else {
+      await client.query('ROLLBACK');
+      res.status(500).json({ error: 'Failed to join team' });
+    }
   } catch (error) {
     await client.query('ROLLBACK');
+    console.error('Accept invitation error:', error);
     res.status(500).json({ error: 'Server error' });
   } finally {
     client.release();

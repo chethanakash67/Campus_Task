@@ -149,7 +149,7 @@ useEffect(() => {
         
         try {
           // Accept the invitation
-          await axios.post(`${API_URL}/teams/accept-invitation`, 
+          const inviteResponse = await axios.post(`${API_URL}/teams/accept-invitation`, 
             { token: pendingInvitation, userId: response.data.user.id },
             { headers: { Authorization: `Bearer ${response.data.token}` }}
           );
@@ -158,14 +158,37 @@ useEffect(() => {
           localStorage.removeItem('pendingInvitation');
           localStorage.removeItem('invitationEmail');
           
+          // Show appropriate message
+          if (inviteResponse.data.alreadyMember) {
+            setMessage('ℹ️ ' + inviteResponse.data.message + ' Redirecting...');
+          } else {
+            setMessage('✅ ' + inviteResponse.data.message + ' Redirecting...');
+          }
+          
           setTimeout(() => {
             navigate('/teams', { replace: true });
           }, 1500);
         } catch (inviteError) {
           console.error('Error accepting invitation:', inviteError);
-          setTimeout(() => {
-            navigate('/dashboard', { replace: true });
-          }, 1000);
+          const errorMsg = inviteError.response?.data?.error || 'Failed to accept invitation';
+          
+          // If email mismatch, clear invitation and go to dashboard
+          if (errorMsg.includes('different email')) {
+            localStorage.removeItem('pendingInvitation');
+            localStorage.removeItem('invitationEmail');
+            setError('⚠️ ' + errorMsg);
+            setTimeout(() => {
+              navigate('/dashboard', { replace: true });
+            }, 2000);
+          } else {
+            // Other errors - still clear and go to dashboard
+            localStorage.removeItem('pendingInvitation');
+            localStorage.removeItem('invitationEmail');
+            setError('⚠️ ' + errorMsg);
+            setTimeout(() => {
+              navigate('/dashboard', { replace: true });
+            }, 2000);
+          }
         }
       } else {
         setMessage('Registration successful! Redirecting...');

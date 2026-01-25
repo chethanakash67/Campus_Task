@@ -19,6 +19,17 @@ function AcceptInvitation() {
             try {
                 const response = await axios.get(`${API_URL}/teams/invitation/${token}`);
                 setInvitation(response.data);
+                
+                // Check if user is authenticated
+                const currentUser = JSON.parse(localStorage.getItem('campusUser') || '{}');
+                if (!currentUser.id) {
+                    // User not authenticated - store invitation and redirect to login
+                    localStorage.setItem('pendingInvitation', token);
+                    localStorage.setItem('invitationEmail', response.data.invitee_email);
+                    setLoading(false);
+                    navigate('/login?from=invitation', { replace: true });
+                    return;
+                }
             } catch (err) {
                 setError('Invalid or expired invitation link');
             } finally {
@@ -32,7 +43,7 @@ function AcceptInvitation() {
             setError('No invitation token found');
             setLoading(false);
         }
-    }, [token]);
+    }, [token, navigate]);
 
    const handleAccept = async () => {
     try {
@@ -40,24 +51,45 @@ function AcceptInvitation() {
         const currentUser = JSON.parse(localStorage.getItem('campusUser') || '{}');
         
         if (!currentUser.id) {
-            // User not logged in - store invitation and redirect to signup
+            // User not logged in - store invitation and redirect to login
             localStorage.setItem('pendingInvitation', token);
             localStorage.setItem('invitationEmail', invitation.invitee_email);
-            navigate('/signup?from=invitation');
+            navigate('/login?from=invitation');
             return;
         }
 
         // User is logged in - accept invitation
         const authToken = localStorage.getItem('campusToken');
-        await axios.post(`${API_URL}/teams/accept-invitation`, 
+        const response = await axios.post(`${API_URL}/teams/accept-invitation`, 
             { token, userId: currentUser.id },
             { headers: { Authorization: `Bearer ${authToken}` }}
         );
         
-        alert('✅ Successfully joined the team!');
+        // Check if user was already a member
+        if (response.data.alreadyMember) {
+            alert('ℹ️ ' + response.data.message);
+        } else {
+            alert('✅ ' + response.data.message);
+        }
+        
+        // Clear pending invitation if it exists
+        localStorage.removeItem('pendingInvitation');
+        localStorage.removeItem('invitationEmail');
+        
         navigate('/teams');
     } catch (err) {
-        setError(err.response?.data?.error || 'Failed to accept invitation');
+        const errorMessage = err.response?.data?.error || 'Failed to accept invitation';
+        setError(errorMessage);
+        // If user email doesn't match, offer to redirect to signup
+        if (errorMessage.includes('different email')) {
+            setTimeout(() => {
+                if (confirm('Would you like to sign up with the invitation email instead?')) {
+                    localStorage.setItem('pendingInvitation', token);
+                    localStorage.setItem('invitationEmail', invitation.invitee_email);
+                    navigate('/signup?from=invitation');
+                }
+            }, 1000);
+        }
     } finally {
         setAccepting(false);
     }
