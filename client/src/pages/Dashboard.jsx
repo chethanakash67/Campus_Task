@@ -1,705 +1,787 @@
-// client/src/pages/Dashboard.jsx - FIXED VERSION
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
-import TaskDetailModal from '../components/TaskDetailModal';
 import Toast from '../components/Toast';
-import { FaPlus, FaEllipsisH, FaTimes, FaUsers, FaUser, FaSearch, FaFilter, FaCopy, FaFileImport } from 'react-icons/fa';
+import TaskDetailDrawer from '../components/TaskDetailDrawer';
 import { useApp } from '../context/AppContext';
+import { 
+  FaArrowUp, FaArrowDown, FaExclamationTriangle, FaCalendarAlt,
+  FaClock, FaCheckCircle, FaChartLine, FaArrowRight, FaPlus,
+  FaTasks, FaFire, FaFlag, FaUsers, FaTrophy, FaTimes, FaUser,
+  FaUserFriends, FaTag, FaClipboardList
+} from 'react-icons/fa';
+import { 
+  MdDashboard, MdTrendingUp, MdAccessTime, MdWarning,
+  MdOutlineInsights, MdSpeed, MdTimeline
+} from 'react-icons/md';
 import './Dashboard.css';
 
 function Dashboard() {
   const navigate = useNavigate();
   const { 
     tasks, 
-    addTask, 
-    moveTask, 
-    duplicateTask,
     toasts, 
     removeToast,
-    addToast,
     currentUser,
     isAuthenticated,
     getMyTeams,
-    getAllTeamMembers,
-    taskTemplates
+    addTask
   } = useApp();
 
-  const [showModal, setShowModal] = useState(false);
-  const [selectedTask, setSelectedTask] = useState(null);
-  const [draggedTask, setDraggedTask] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterPriority, setFilterPriority] = useState('all');
-  const [filterAssignee, setFilterAssignee] = useState('all');
-  const [activeTab, setActiveTab] = useState('personal');
-  const [selectedTeamFilter, setSelectedTeamFilter] = useState('all');
-  
-  // Check authentication - FIXED
-  useEffect(() => {
-    if (!isAuthenticated || !currentUser) {
-      console.log('Not authenticated, redirecting to login');
-      navigate('/login', { replace: true });
-    }
-  }, [isAuthenticated, currentUser, navigate]);
-
-  // New Task Form State
+  // Create Task Modal State
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [taskType, setTaskType] = useState('personal'); // 'personal' or 'team'
+  const [selectedTeam, setSelectedTeam] = useState(null);
+  const [selectedAssignees, setSelectedAssignees] = useState([]);
   const [newTask, setNewTask] = useState({
-    title: "",
-    description: "",
-    priority: "Medium",
-    dueDate: "",
-    tags: [],
-    assignees: [],
-    status: "todo",
-    taskType: "personal",
-    teamId: null,
-    newTag: ""
+    title: '',
+    description: '',
+    priority: 'Medium',
+    dueDate: '',
+    tags: []
   });
+  const [tagInput, setTagInput] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Task Detail Drawer State
+  const [selectedTaskForDrawer, setSelectedTaskForDrawer] = useState(null);
 
-  // Return early if not authenticated
-  if (!isAuthenticated || !currentUser) {
-    return null;
-  }
-
-  const myTeams = getMyTeams();
-  const allMembers = getAllTeamMembers();
-
-  // Filtered tasks based on tab and filters
-  const filteredTasks = useMemo(() => {
-    let filtered = tasks;
-
-    // Filter by tab (Personal or Team)
-    if (activeTab === 'personal') {
-      filtered = filtered.filter(task => 
-        task.taskType === 'personal' && 
-        task.assignees?.some(a => a.id === currentUser?.id)
-      );
-    } else {
-      filtered = filtered.filter(task => task.taskType === 'team');
-      
-      // Filter by selected team
-      if (selectedTeamFilter !== 'all') {
-        filtered = filtered.filter(task => task.teamId === parseInt(selectedTeamFilter));
-      }
-    }
-
-    // Search filter
-    filtered = filtered.filter(task => {
-      const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          (task.description && task.description.toLowerCase().includes(searchQuery.toLowerCase()));
-      const matchesPriority = filterPriority === 'all' || task.priority.toLowerCase() === filterPriority;
-      const matchesAssignee = filterAssignee === 'all' || task.assignees?.some(a => a.id === filterAssignee);
-      
-      return matchesSearch && matchesPriority && matchesAssignee;
+  // Reset form when modal closes or task type changes
+  const resetForm = () => {
+    setNewTask({
+      title: '',
+      description: '',
+      priority: 'Medium',
+      dueDate: '',
+      tags: []
     });
+    setSelectedTeam(null);
+    setSelectedAssignees([]);
+    setTagInput('');
+    setTaskType('personal');
+  };
 
-    return filtered;
-  }, [tasks, searchQuery, filterPriority, filterAssignee, activeTab, selectedTeamFilter, currentUser?.id]);
-
-  // Statistics
-  const stats = useMemo(() => {
-    const relevantTasks = activeTab === 'personal' 
-      ? tasks.filter(t => t.taskType === 'personal' && t.assignees?.some(a => a.id === currentUser?.id))
-      : tasks.filter(t => t.taskType === 'team' && (selectedTeamFilter === 'all' || t.teamId === parseInt(selectedTeamFilter)));
-
-    return {
-      total: relevantTasks.length,
-      todo: relevantTasks.filter(t => t.status === 'todo').length,
-      inProgress: relevantTasks.filter(t => t.status === 'in-progress').length,
-      done: relevantTasks.filter(t => t.status === 'done').length,
-      overdue: relevantTasks.filter(t => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'done').length
-    };
-  }, [tasks, activeTab, selectedTeamFilter, currentUser?.id]);
-
-  // Handle input changes
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setNewTask({ ...newTask, [name]: value });
+  // Handle modal close
+  const handleCloseModal = () => {
+    setShowCreateModal(false);
+    resetForm();
   };
 
   // Handle task type change
   const handleTaskTypeChange = (type) => {
-    setNewTask({ 
-      ...newTask, 
-      taskType: type,
-      teamId: type === 'personal' ? null : newTask.teamId,
-      assignees: type === 'personal' && currentUser ? [{ id: currentUser.id, name: currentUser.name, type: 'user' }] : []
-    });
+    setTaskType(type);
+    setSelectedTeam(null);
+    setSelectedAssignees([]);
   };
 
   // Handle team selection
-  const handleTeamSelect = (e) => {
-    const teamId = e.target.value ? parseInt(e.target.value) : null;
-    const team = myTeams.find(t => t.id === teamId);
+  const handleTeamSelect = (teamId) => {
+    const team = myTeams.find(t => t.id === parseInt(teamId));
+    setSelectedTeam(team);
+    setSelectedAssignees([]);
+  };
+
+  // Handle assignee toggle
+  const handleAssigneeToggle = (member) => {
+    setSelectedAssignees(prev => {
+      const isSelected = prev.some(a => a.id === member.id);
+      if (isSelected) {
+        return prev.filter(a => a.id !== member.id);
+      } else {
+        return [...prev, member];
+      }
+    });
+  };
+
+  // Handle tag add
+  const handleAddTag = (e) => {
+    e.preventDefault();
+    if (tagInput.trim() && !newTask.tags.includes(tagInput.trim())) {
+      setNewTask(prev => ({
+        ...prev,
+        tags: [...prev.tags, tagInput.trim()]
+      }));
+      setTagInput('');
+    }
+  };
+
+  // Handle tag remove
+  const handleRemoveTag = (tagToRemove) => {
+    setNewTask(prev => ({
+      ...prev,
+      tags: prev.tags.filter(tag => tag !== tagToRemove)
+    }));
+  };
+
+  // Handle task creation
+  const handleCreateTask = async (e) => {
+    e.preventDefault();
     
-    setNewTask({ 
-      ...newTask, 
-      teamId,
-      assignees: team ? team.members.slice(0, 1).map(m => ({ ...m, type: 'user' })) : []
-    });
-  };
-
-  // Toggle assignee
-  const toggleAssignee = (member) => {
-    const isSelected = newTask.assignees.some(a => a.id === member.id);
-    if (isSelected) {
-      setNewTask({
-        ...newTask,
-        assignees: newTask.assignees.filter(a => a.id !== member.id)
-      });
-    } else {
-      setNewTask({
-        ...newTask,
-        assignees: [...newTask.assignees, { ...member, type: 'user' }]
-      });
-    }
-  };
-
-  // Add task from template
-  const applyTemplate = (template) => {
-    setNewTask({
-      ...newTask,
-      title: template.name,
-      description: template.description,
-      priority: template.priority,
-      tags: [...template.tags],
-      subtasks: template.subtasks.map((st, idx) => ({ id: idx + 1, ...st }))
-    });
-  };
-
-  // Handle adding task
-  const handleAddTask = (e) => {
-    e.preventDefault();
-    if (!newTask.title) return;
-
-    // Ensure at least one assignee for team tasks
-    if (newTask.taskType === 'team' && newTask.assignees.length === 0) {
-      addToast('Please assign at least one team member', 'error');
+    if (!newTask.title.trim()) {
       return;
     }
 
-    // Ensure team is selected for team tasks
-    if (newTask.taskType === 'team' && !newTask.teamId) {
-      addToast('Please select a team', 'error');
-      return;
-    }
+    setIsSubmitting(true);
 
-    const taskToAdd = {
-      title: newTask.title,
-      description: newTask.description,
-      priority: newTask.priority,
-      status: newTask.status,
-      dueDate: newTask.dueDate,
-      tags: newTask.tags,
-      assignees: newTask.assignees,
-      taskType: newTask.taskType,
-      teamId: newTask.teamId,
-      subtasks: newTask.subtasks || []
+    try {
+      const taskData = {
+        title: newTask.title.trim(),
+        description: newTask.description.trim(),
+        priority: newTask.priority,
+        status: 'todo',
+        dueDate: newTask.dueDate || null,
+        tags: newTask.tags,
+        taskType: taskType,
+        teamId: taskType === 'team' && selectedTeam ? selectedTeam.id : null,
+        assignees: taskType === 'team' ? selectedAssignees : []
+      };
+
+      await addTask(taskData);
+      handleCloseModal();
+    } catch (error) {
+      console.error('Error creating task:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isAuthenticated || !currentUser) {
+      navigate('/login', { replace: true });
+    }
+  }, [isAuthenticated, currentUser, navigate]);
+
+  const myTeams = getMyTeams();
+
+  // Helper functions
+  const isTaskOverdue = (task) => {
+    if (!task.dueDate || task.status === 'done' || task.status === 'completed_late') return false;
+    const dueDate = new Date(task.dueDate);
+    const today = new Date();
+    dueDate.setHours(23, 59, 59, 999);
+    today.setHours(0, 0, 0, 0);
+    return dueDate < today;
+  };
+
+  const isCompletedLate = (task) => task.status === 'completed_late';
+  
+  const isDueToday = (task) => {
+    if (!task.dueDate || task.status === 'done' || task.status === 'completed_late') return false;
+    const dueDate = new Date(task.dueDate);
+    const today = new Date();
+    return dueDate.toDateString() === today.toDateString();
+  };
+
+  const isDueThisWeek = (task) => {
+    if (!task.dueDate || task.status === 'done' || task.status === 'completed_late') return false;
+    const dueDate = new Date(task.dueDate);
+    const today = new Date();
+    const weekFromNow = new Date(today);
+    weekFromNow.setDate(weekFromNow.getDate() + 7);
+    return dueDate >= today && dueDate <= weekFromNow;
+  };
+
+  // Get user's tasks
+  const userTasks = useMemo(() => {
+    return tasks.filter(t => 
+      t.assignees?.some(a => a.id === currentUser?.id || a.email === currentUser?.email) ||
+      t.createdBy === currentUser?.id ||
+      t.createdBy === currentUser?.email
+    );
+  }, [tasks, currentUser]);
+
+  // Statistics
+  const stats = useMemo(() => {
+    const total = userTasks.length;
+    const completed = userTasks.filter(t => t.status === 'done').length;
+    const completedLate = userTasks.filter(t => isCompletedLate(t)).length;
+    const overdue = userTasks.filter(t => isTaskOverdue(t)).length;
+    const dueToday = userTasks.filter(t => isDueToday(t)).length;
+    const dueThisWeek = userTasks.filter(t => isDueThisWeek(t)).length;
+    const pending = userTasks.filter(t => t.status !== 'done' && t.status !== 'completed_late').length;
+    const inProgress = userTasks.filter(t => t.status === 'in-progress').length;
+    
+    const completionRate = total > 0 ? Math.round(((completed + completedLate) / total) * 100) : 0;
+    const onTimeRate = (completed + completedLate) > 0 
+      ? Math.round((completed / (completed + completedLate)) * 100) 
+      : 100;
+
+    return {
+      total,
+      completed,
+      completedLate,
+      overdue,
+      dueToday,
+      dueThisWeek,
+      pending,
+      inProgress,
+      completionRate,
+      onTimeRate
     };
+  }, [userTasks]);
 
-    addTask(taskToAdd);
-    setShowModal(false);
-    resetForm();
-  };
+  // Get productivity data for last 7 days
+  const productivityData = useMemo(() => {
+    const last7Days = [];
+    const today = new Date();
+    
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      
+      const completedOnDay = userTasks.filter(t => {
+        if (t.status !== 'done' && t.status !== 'completed_late') return false;
+        const completedDate = t.completedAt || t.updatedAt;
+        if (!completedDate) return false;
+        return new Date(completedDate).toDateString() === date.toDateString();
+      }).length;
 
-  const resetForm = () => {
-    setNewTask({ 
-      title: "", 
-      description: "",
-      priority: "Medium", 
-      dueDate: "",
-      tags: [],
-      assignees: [],
-      status: "todo",
-      taskType: "personal",
-      teamId: null,
-      newTag: "",
-      subtasks: []
-    });
-  };
+      const lateOnDay = userTasks.filter(t => {
+        if (t.status !== 'completed_late') return false;
+        const completedDate = t.completedAt || t.updatedAt;
+        if (!completedDate) return false;
+        return new Date(completedDate).toDateString() === date.toDateString();
+      }).length;
 
-  // Drag and Drop
-  const handleDragStart = (e, task) => {
-    setDraggedTask(task);
-    e.dataTransfer.effectAllowed = 'move';
-  };
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  };
-
-  const handleDrop = (e, newStatus) => {
-    e.preventDefault();
-    if (draggedTask && draggedTask.status !== newStatus) {
-      moveTask(draggedTask.id, newStatus);
-    }
-    setDraggedTask(null);
-  };
-
-  const handleDragEnd = () => {
-    setDraggedTask(null);
-  };
-
-  // Tag management
-  const addTag = () => {
-    if (newTask.newTag.trim() && !newTask.tags.includes(newTask.newTag.trim())) {
-      setNewTask({ 
-        ...newTask, 
-        tags: [...newTask.tags, newTask.newTag.trim()],
-        newTag: ""
+      last7Days.push({
+        date: date.toLocaleDateString('en-US', { weekday: 'short' }),
+        fullDate: dateStr,
+        completed: completedOnDay,
+        late: lateOnDay,
+        onTime: completedOnDay - lateOnDay
       });
     }
+    
+    return last7Days;
+  }, [userTasks]);
+
+  // Get top priority tasks
+  const priorityTasks = useMemo(() => {
+    return userTasks
+      .filter(t => t.status !== 'done' && t.status !== 'completed_late')
+      .sort((a, b) => {
+        // Sort by overdue first, then by due date, then by priority
+        const aOverdue = isTaskOverdue(a);
+        const bOverdue = isTaskOverdue(b);
+        if (aOverdue && !bOverdue) return -1;
+        if (!aOverdue && bOverdue) return 1;
+        
+        // Then by due date
+        if (a.dueDate && b.dueDate) {
+          return new Date(a.dueDate) - new Date(b.dueDate);
+        }
+        if (a.dueDate) return -1;
+        if (b.dueDate) return 1;
+        
+        // Then by priority
+        const priorityOrder = { High: 0, Medium: 1, Low: 2 };
+        return (priorityOrder[a.priority] || 1) - (priorityOrder[b.priority] || 1);
+      })
+      .slice(0, 3);
+  }, [userTasks]);
+
+  // Team stats
+  const teamStats = useMemo(() => {
+    if (!myTeams || myTeams.length === 0) return [];
+    
+    return myTeams.map(team => {
+      const teamTasks = userTasks.filter(t => t.teamId === team.id);
+      const pending = teamTasks.filter(t => t.status !== 'done' && t.status !== 'completed_late').length;
+      const overdue = teamTasks.filter(t => isTaskOverdue(t)).length;
+      const completed = teamTasks.filter(t => t.status === 'done' || t.status === 'completed_late').length;
+      
+      return {
+        id: team.id,
+        name: team.name,
+        total: teamTasks.length,
+        pending,
+        overdue,
+        completed,
+        completionRate: teamTasks.length > 0 ? Math.round((completed / teamTasks.length) * 100) : 0
+      };
+    }).filter(t => t.total > 0);
+  }, [myTeams, userTasks]);
+
+  const maxProductivity = Math.max(...productivityData.map(d => d.completed), 1);
+
+  const navigateToTasks = (filter) => {
+    navigate('/tasks', { state: { activeFilter: filter } });
   };
 
-  const removeTag = (tagToRemove) => {
-    setNewTask({
-      ...newTask,
-      tags: newTask.tags.filter(tag => tag !== tagToRemove)
-    });
-  };
-
-  // Quick actions
-  const handleQuickDuplicate = (task) => {
-    duplicateTask(task.id);
-  };
-
-  // Get available assignees based on task type
-  const getAvailableAssignees = () => {
-    if (newTask.taskType === 'personal' && currentUser) {
-      return [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: 'You' }];
-    } else if (newTask.teamId) {
-      const team = myTeams.find(t => t.id === newTask.teamId);
-      return team ? team.members : [];
-    }
-    return [];
-  };
+  if (!isAuthenticated || !currentUser) {
+    return null;
+  }
 
   return (
     <div className="dashboard-container">
       <Sidebar />
-      <main className="main-content">
+      <main className="main-content dashboard-insights">
         <Toast toasts={toasts} removeToast={removeToast} />
 
-        {/* Header */}
-        <header className="top-bar">
-          <div className="page-title">
-            <h1>Dashboard</h1>
-            <p>Manage your tasks and projects</p>
+        {/* Dashboard Header */}
+        <div className="dashboard-header">
+          <div className="header-greeting">
+            <h1>Welcome back, {currentUser?.name?.split(' ')[0] || 'User'}</h1>
+            <p className="header-date">
+              {new Date().toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+              })}
+            </p>
           </div>
-          <button className="btn-primary" onClick={() => setShowModal(true)}>
-            <FaPlus style={{ marginRight: '8px' }} /> New Task
-          </button>
-        </header>
-
-        {/* Tab Navigation */}
-        <div className="tabs-container">
-          <div className="tabs">
-            <button 
-              className={`tab ${activeTab === 'personal' ? 'active' : ''}`}
-              onClick={() => setActiveTab('personal')}
-            >
-              <FaUser /> Personal Tasks
+          <div className="header-actions">
+            <button className="btn btn-secondary" onClick={() => navigate('/tasks')}>
+              <FaTasks style={{ marginRight: '8px' }} /> View Tasks
             </button>
-            <button 
-              className={`tab ${activeTab === 'team' ? 'active' : ''}`}
-              onClick={() => setActiveTab('team')}
-            >
-              <FaUsers /> Team Tasks
+            <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
+              <FaPlus style={{ marginRight: '8px' }} /> Create Task
             </button>
           </div>
-          
-          {/* Team filter for team tasks */}
-          {activeTab === 'team' && myTeams.length > 0 && (
-            <select 
-              className="team-filter-select"
-              value={selectedTeamFilter}
-              onChange={(e) => setSelectedTeamFilter(e.target.value)}
-            >
-              <option value="all">All Teams</option>
-              {myTeams.map(team => (
-                <option key={team.id} value={team.id}>{team.name}</option>
-              ))}
-            </select>
-          )}
         </div>
 
-        {/* Stats Cards */}
-        <div className="stats-container">
-          <div className="stat-card">
-            <div className="stat-value">{stats.total}</div>
-            <div className="stat-label">Total Tasks</div>
+        {/* Hero Insight Cards */}
+        <div className="insight-cards-grid">
+          <div 
+            className={`insight-card ${stats.overdue > 0 ? 'urgent' : ''}`}
+            onClick={() => navigateToTasks('overdue')}
+          >
+            <div className="insight-card-icon urgent">
+              <FaExclamationTriangle />
+            </div>
+            <div className="insight-card-content">
+              <span className="insight-label">Overdue Tasks</span>
+              <span className="insight-value">{stats.overdue}</span>
+              {stats.overdue > 0 && (
+                <span className="insight-badge urgent">Needs attention</span>
+              )}
+            </div>
+            <FaArrowRight className="insight-arrow" />
           </div>
-          <div className="stat-card">
-            <div className="stat-value">{stats.todo}</div>
-            <div className="stat-label">To Do</div>
+
+          <div 
+            className={`insight-card ${stats.dueToday > 0 ? 'warning' : ''}`}
+            onClick={() => navigateToTasks('pending')}
+          >
+            <div className="insight-card-icon warning">
+              <FaCalendarAlt />
+            </div>
+            <div className="insight-card-content">
+              <span className="insight-label">Due Today</span>
+              <span className="insight-value">{stats.dueToday}</span>
+              <span className="insight-subtext">{stats.dueThisWeek} this week</span>
+            </div>
+            <FaArrowRight className="insight-arrow" />
           </div>
-          <div className="stat-card stat-primary">
-            <div className="stat-value">{stats.inProgress}</div>
-            <div className="stat-label">In Progress</div>
+
+          <div 
+            className={`insight-card ${stats.completedLate > 0 ? 'late' : ''}`}
+            onClick={() => navigateToTasks('completed')}
+          >
+            <div className="insight-card-icon late">
+              <FaClock />
+            </div>
+            <div className="insight-card-content">
+              <span className="insight-label">Late Submissions</span>
+              <span className="insight-value">{stats.completedLate}</span>
+              <span className="insight-subtext">{stats.onTimeRate}% on-time rate</span>
+            </div>
+            <FaArrowRight className="insight-arrow" />
           </div>
-          <div className="stat-card stat-success">
-            <div className="stat-value">{stats.done}</div>
-            <div className="stat-label">Completed</div>
+
+          <div 
+            className="insight-card success"
+            onClick={() => navigateToTasks('completed')}
+          >
+            <div className="insight-card-icon success">
+              <FaCheckCircle />
+            </div>
+            <div className="insight-card-content">
+              <span className="insight-label">Completion Rate</span>
+              <span className="insight-value">{stats.completionRate}%</span>
+              <span className="insight-subtext">{stats.completed + stats.completedLate} of {stats.total} tasks</span>
+            </div>
+            <FaArrowRight className="insight-arrow" />
+          </div>
+        </div>
+
+        {/* Main Content Grid */}
+        <div className="dashboard-content-grid">
+          {/* Productivity Timeline */}
+          <div className="dashboard-section productivity-section">
+            <div className="section-header">
+              <div className="section-title">
+                <MdTimeline className="section-icon" />
+                <h2>Productivity Timeline</h2>
+              </div>
+              <span className="section-subtitle">Last 7 days</span>
+            </div>
+            <div className="productivity-chart">
+              {productivityData.map((day, index) => (
+                <div className="chart-bar-container" key={index}>
+                  <div className="chart-bar-wrapper">
+                    <div 
+                      className="chart-bar on-time"
+                      style={{ height: `${(day.onTime / maxProductivity) * 100}%` }}
+                    >
+                      {day.onTime > 0 && <span className="bar-value">{day.onTime}</span>}
+                    </div>
+                    <div 
+                      className="chart-bar late"
+                      style={{ height: `${(day.late / maxProductivity) * 100}%` }}
+                    >
+                      {day.late > 0 && <span className="bar-value">{day.late}</span>}
+                    </div>
+                  </div>
+                  <span className="chart-label">{day.date}</span>
+                </div>
+              ))}
+            </div>
+            <div className="chart-legend">
+              <div className="legend-item">
+                <span className="legend-dot on-time"></span>
+                <span>On Time</span>
+              </div>
+              <div className="legend-item">
+                <span className="legend-dot late"></span>
+                <span>Late</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Priority Focus Panel */}
+          <div className="dashboard-section priority-section">
+            <div className="section-header">
+              <div className="section-title">
+                <FaFire className="section-icon priority" />
+                <h2>Priority Focus</h2>
+              </div>
+              <span className="section-subtitle">Most urgent tasks</span>
+            </div>
+            <div className="priority-list">
+              {priorityTasks.length === 0 ? (
+                <div className="empty-priority">
+                  <FaTrophy className="empty-icon" />
+                  <p>All caught up! No urgent tasks.</p>
+                </div>
+              ) : (
+                priorityTasks.map((task, index) => (
+                  <div 
+                    className={`priority-item ${isTaskOverdue(task) ? 'overdue' : ''}`}
+                    key={task.id}
+                    onClick={() => setSelectedTaskForDrawer(task)}
+                  >
+                    <span className="priority-rank">{index + 1}</span>
+                    <div className="priority-content">
+                      <h4>{task.title}</h4>
+                      <div className="priority-meta">
+                        {task.dueDate && (
+                          <span className={`due-tag ${isTaskOverdue(task) ? 'overdue' : isDueToday(task) ? 'today' : ''}`}>
+                            <FaCalendarAlt />
+                            {isTaskOverdue(task) 
+                              ? 'Overdue' 
+                              : isDueToday(task) 
+                                ? 'Due Today'
+                                : new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                            }
+                          </span>
+                        )}
+                        <span className={`priority-tag ${task.priority.toLowerCase()}`}>
+                          <FaFlag /> {task.priority}
+                        </span>
+                      </div>
+                    </div>
+                    <FaArrowRight className="priority-arrow" />
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Team Snapshot */}
+        {teamStats.length > 0 && (
+          <div className="dashboard-section team-section">
+            <div className="section-header">
+              <div className="section-title">
+                <FaUsers className="section-icon team" />
+                <h2>Team Snapshot</h2>
+              </div>
+              <button className="section-link" onClick={() => navigate('/teams')}>
+                View Teams <FaArrowRight />
+              </button>
+            </div>
+            <div className="team-cards-grid">
+              {teamStats.map(team => (
+                <div className="team-stat-card" key={team.id}>
+                  <div className="team-stat-header">
+                    <h4>{team.name}</h4>
+                    <span className="team-completion">{team.completionRate}%</span>
+                  </div>
+                  <div className="team-stat-bars">
+                    <div className="stat-bar-row">
+                      <span className="stat-bar-label">Pending</span>
+                      <div className="stat-bar-track">
+                        <div 
+                          className="stat-bar-fill pending"
+                          style={{ width: `${team.total > 0 ? (team.pending / team.total) * 100 : 0}%` }}
+                        ></div>
+                      </div>
+                      <span className="stat-bar-value">{team.pending}</span>
+                    </div>
+                    <div className="stat-bar-row">
+                      <span className="stat-bar-label">Overdue</span>
+                      <div className="stat-bar-track">
+                        <div 
+                          className="stat-bar-fill overdue"
+                          style={{ width: `${team.total > 0 ? (team.overdue / team.total) * 100 : 0}%` }}
+                        ></div>
+                      </div>
+                      <span className="stat-bar-value">{team.overdue}</span>
+                    </div>
+                    <div className="stat-bar-row">
+                      <span className="stat-bar-label">Completed</span>
+                      <div className="stat-bar-track">
+                        <div 
+                          className="stat-bar-fill completed"
+                          style={{ width: `${team.total > 0 ? (team.completed / team.total) * 100 : 0}%` }}
+                        ></div>
+                      </div>
+                      <span className="stat-bar-value">{team.completed}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Quick Actions CTA */}
+        <div className="dashboard-cta-section">
+          <div className="cta-card" onClick={() => navigate('/tasks')}>
+            <FaTasks className="cta-icon" />
+            <div className="cta-content">
+              <h3>View All Tasks</h3>
+              <p>Manage and organize your work</p>
+            </div>
+            <FaArrowRight className="cta-arrow" />
+          </div>
+          <div className="cta-card primary" onClick={() => setShowCreateModal(true)}>
+            <FaPlus className="cta-icon" />
+            <div className="cta-content">
+              <h3>Create New Task</h3>
+              <p>Add a new task to your list</p>
+            </div>
+            <FaArrowRight className="cta-arrow" />
           </div>
           {stats.overdue > 0 && (
-            <div className="stat-card stat-danger">
-              <div className="stat-value">{stats.overdue}</div>
-              <div className="stat-label">Overdue</div>
+            <div className="cta-card urgent" onClick={() => navigateToTasks('overdue')}>
+              <FaExclamationTriangle className="cta-icon" />
+              <div className="cta-content">
+                <h3>Review Overdue</h3>
+                <p>{stats.overdue} tasks need attention</p>
+              </div>
+              <FaArrowRight className="cta-arrow" />
             </div>
           )}
         </div>
 
-        {/* Search and Filter */}
-        <div className="filter-bar">
-          <div className="search-box">
-            <FaSearch className="search-icon" />
-            <input
-              type="text"
-              placeholder="Search tasks..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-          <div className="filter-group">
-            <FaFilter className="filter-icon" />
-            <select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)}>
-              <option value="all">All Priorities</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
-            <select value={filterAssignee} onChange={(e) => setFilterAssignee(e.target.value)}>
-              <option value="all">All Assignees</option>
-              {allMembers.map(member => (
-                <option key={member.id} value={member.id}>{member.name}</option>
-              ))}
-            </select>
-          </div>
-        </div>
+      </main>
 
-        {/* Kanban Board */}
-        <div className="board-grid">
-          {['todo', 'in-progress', 'done'].map(status => (
-            <div 
-              className="board-column" 
-              key={status}
-              onDragOver={handleDragOver}
-              onDrop={(e) => handleDrop(e, status)}
-            >
-              <div className="column-header">
-                <span className={`status-dot ${status === 'todo' ? 'grey' : status === 'in-progress' ? 'blue' : 'green'}`}></span>
-                <h2>{status === 'todo' ? 'To Do' : status === 'in-progress' ? 'In Progress' : 'Done'}</h2>
-                <span className="count">{filteredTasks.filter(t => t.status === status).length}</span>
-              </div>
-              <div className="task-list">
-                {filteredTasks.filter(t => t.status === status).length === 0 ? (
-                  <div className="empty-state">
-                    <p>No tasks here</p>
-                    <span>Drag tasks or create new ones</span>
-                  </div>
-                ) : (
-                  filteredTasks.filter(t => t.status === status).map(task => (
-                    <TaskCard 
-                      key={task.id} 
-                      task={task} 
-                      onDragStart={handleDragStart}
-                      onDragEnd={handleDragEnd}
-                      onClick={() => setSelectedTask(task)}
-                      onDuplicate={handleQuickDuplicate}
-                    />
-                  ))
-                )}
-              </div>
+      {/* Create Task Modal */}
+      {showCreateModal && (
+        <div className="create-task-modal-overlay" onClick={handleCloseModal}>
+          <div className="create-task-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2><FaPlus /> Create New Task</h2>
+              <button 
+                type="button"
+                className="modal-close" 
+                onClick={handleCloseModal}
+                aria-label="Close modal"
+                title="Close"
+              >
+                <span className="close-icon">×</span>
+              </button>
             </div>
-          ))}
-        </div>
 
-        {/* Create Task Modal */}
-        {showModal && (
-          <div className="modal-overlay">
-            <div className="modal-content modal-create-task">
-              <div className="modal-header">
-                <h2>Create New Task</h2>
-                <button className="close-btn" onClick={() => { setShowModal(false); resetForm(); }}>
-                  <FaTimes />
+            <form onSubmit={handleCreateTask}>
+              {/* Task Type Toggle */}
+              <div className="task-type-toggle">
+                <button
+                  type="button"
+                  className={`type-btn ${taskType === 'personal' ? 'active' : ''}`}
+                  onClick={() => handleTaskTypeChange('personal')}
+                >
+                  <FaUser /> Personal Task
+                </button>
+                <button
+                  type="button"
+                  className={`type-btn ${taskType === 'team' ? 'active' : ''}`}
+                  onClick={() => handleTaskTypeChange('team')}
+                >
+                  <FaUserFriends /> Team Task
                 </button>
               </div>
-              
-              <form onSubmit={handleAddTask}>
-                {/* Task Type Selection */}
-                <div className="form-group">
-                  <label>Task Type *</label>
-                  <div className="task-type-selector">
-                    <button
-                      type="button"
-                      className={`task-type-btn ${newTask.taskType === 'personal' ? 'active' : ''}`}
-                      onClick={() => handleTaskTypeChange('personal')}
-                    >
-                      <FaUser /> Personal Task
-                    </button>
-                    <button
-                      type="button"
-                      className={`task-type-btn ${newTask.taskType === 'team' ? 'active' : ''}`}
-                      onClick={() => handleTaskTypeChange('team')}
-                    >
-                      <FaUsers /> Team Task
-                    </button>
-                  </div>
-                </div>
 
-                {/* Team Selection (only for team tasks) */}
-                {newTask.taskType === 'team' && (
-                  <div className="form-group">
-                    <label>Select Team *</label>
-                    <select 
-                      value={newTask.teamId || ''} 
-                      onChange={handleTeamSelect}
-                      required
-                    >
-                      <option value="">Choose a team...</option>
-                      {myTeams.map(team => (
-                        <option key={team.id} value={team.id}>{team.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* Template Selection */}
+              {/* Team Selection (only for team tasks) */}
+              {taskType === 'team' && (
                 <div className="form-group">
-                  <label>Use Template (Optional)</label>
-                  <div className="template-selector">
-                    {taskTemplates.map((template, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        className="template-btn"
-                        onClick={() => applyTemplate(template)}
-                        title={template.description}
-                      >
-                        <FaFileImport /> {template.name}
-                      </button>
+                  <label><FaUsers /> Select Team</label>
+                  <select
+                    value={selectedTeam?.id || ''}
+                    onChange={(e) => handleTeamSelect(e.target.value)}
+                    required={taskType === 'team'}
+                  >
+                    <option value="">Choose a team...</option>
+                    {myTeams.map(team => (
+                      <option key={team.id} value={team.id}>
+                        {team.name}
+                      </option>
                     ))}
-                  </div>
+                  </select>
                 </div>
+              )}
 
+              {/* Assignees (only for team tasks with team selected) */}
+              {taskType === 'team' && selectedTeam && selectedTeam.members && (
                 <div className="form-group">
-                  <label>Task Title *</label>
-                  <input 
-                    type="text" 
-                    name="title" 
-                    placeholder="e.g., Fix Navigation Bug" 
-                    value={newTask.title} 
-                    onChange={handleInputChange} 
-                    autoFocus 
-                    required 
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Description</label>
-                  <textarea
-                    name="description"
-                    placeholder="Add more details about this task..."
-                    value={newTask.description}
-                    onChange={handleInputChange}
-                    rows={3}
-                  />
-                </div>
-
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Priority</label>
-                    <select name="priority" value={newTask.priority} onChange={handleInputChange}>
-                      <option value="Low">Low</option>
-                      <option value="Medium">Medium</option>
-                      <option value="High">High</option>
-                    </select>
-                  </div>
-
-                  <div className="form-group">
-                    <label>Due Date</label>
-                    <input
-                      type="date"
-                      name="dueDate"
-                      value={newTask.dueDate}
-                      onChange={handleInputChange}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label>Status</label>
-                    <select name="status" value={newTask.status} onChange={handleInputChange}>
-                      <option value="todo">To Do</option>
-                      <option value="in-progress">In Progress</option>
-                      <option value="done">Done</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Assignees */}
-                <div className="form-group">
-                  <label>
-                    Assign To {newTask.taskType === 'team' && '*'}
-                    <span className="label-info">
-                      ({newTask.assignees.length} selected)
-                    </span>
-                  </label>
-                  <div className="assignee-selector-enhanced">
-                    {getAvailableAssignees().map(member => (
-                      <div 
-                        key={member.id} 
-                        className={`assignee-option ${newTask.assignees.some(a => a.id === member.id) ? 'selected' : ''}`}
-                        onClick={() => newTask.taskType !== 'personal' && toggleAssignee(member)}
-                        style={{ cursor: newTask.taskType === 'personal' ? 'not-allowed' : 'pointer' }}
-                      >
-                        <div className="mini-avatar">{member.id}</div>
-                        <div className="assignee-info">
-                          <div className="assignee-name">{member.name}</div>
-                          <div className="assignee-role">{member.role}</div>
+                  <label><FaUserFriends /> Assign to Team Members</label>
+                  <p className="form-hint">Selected members will receive an email notification</p>
+                  <div className="assignees-grid">
+                    {selectedTeam.members
+                      .map(member => (
+                        <div
+                          key={member.id}
+                          className={`assignee-chip ${selectedAssignees.some(a => a.id === member.id) ? 'selected' : ''}`}
+                          onClick={() => handleAssigneeToggle(member)}
+                        >
+                          <div className="assignee-avatar">
+                            {member.name?.charAt(0).toUpperCase() || 'U'}
+                          </div>
+                          <span className="assignee-name">
+                            {member.name}
+                            {member.id === currentUser?.id && ' (You)'}
+                          </span>
+                          {selectedAssignees.some(a => a.id === member.id) && (
+                            <FaCheckCircle className="check-icon" />
+                          )}
                         </div>
-                      </div>
-                    ))}
-                    {getAvailableAssignees().length === 0 && (
-                      <div className="no-assignees">
-                        {newTask.taskType === 'team' 
-                          ? 'Please select a team first' 
-                          : 'Personal tasks are assigned to you'}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Tags */}
-                <div className="form-group">
-                  <label>Tags</label>
-                  <div className="tags-input">
-                    <div className="tags-display">
-                      {newTask.tags.map((tag, idx) => (
-                        <span key={idx} className="tag">
-                          {tag}
-                          <button type="button" onClick={() => removeTag(tag)}>×</button>
-                        </span>
                       ))}
-                    </div>
-                    <div className="tag-input-row">
-                      <input
-                        type="text"
-                        name="newTag"
-                        placeholder="Add a tag..."
-                        value={newTask.newTag}
-                        onChange={handleInputChange}
-                        onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
-                      />
-                      <button type="button" className="btn-add-tag" onClick={addTag}>
-                        Add
-                      </button>
-                    </div>
+                  </div>
+                  {selectedTeam.members.length === 0 && (
+                    <p className="no-members">No members in this team to assign</p>
+                  )}
+                </div>
+              )}
+
+              {/* Task Title */}
+              <div className="form-group">
+                <label><FaClipboardList /> Task Title *</label>
+                <input
+                  type="text"
+                  placeholder="What needs to be done?"
+                  value={newTask.title}
+                  onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+                  required
+                  autoFocus
+                />
+              </div>
+
+              {/* Task Description */}
+              <div className="form-group">
+                <label>Description</label>
+                <textarea
+                  placeholder="Add more details about this task..."
+                  value={newTask.description}
+                  onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
+                  rows={3}
+                />
+              </div>
+
+              {/* Priority and Due Date Row */}
+              <div className="form-row">
+                <div className="form-group">
+                  <label><FaFlag /> Priority</label>
+                  <select
+                    value={newTask.priority}
+                    onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })}
+                  >
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label><FaCalendarAlt /> Due Date</label>
+                  <input
+                    type="date"
+                    value={newTask.dueDate}
+                    onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
+                    min={new Date().toISOString().split('T')[0]}
+                  />
+                </div>
+              </div>
+
+              {/* Tags */}
+              <div className="form-group">
+                <label><FaTag /> Tags</label>
+                <div className="tags-input-wrapper">
+                  <div className="tags-display">
+                    {newTask.tags.map(tag => (
+                      <span key={tag} className="tag-chip">
+                        {tag}
+                        <button type="button" onClick={() => handleRemoveTag(tag)}>
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="tag-input-row">
+                    <input
+                      type="text"
+                      placeholder="Add a tag..."
+                      value={tagInput}
+                      onChange={(e) => setTagInput(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleAddTag(e)}
+                    />
+                    <button type="button" onClick={handleAddTag} className="add-tag-btn">
+                      Add
+                    </button>
                   </div>
                 </div>
+              </div>
 
-                <button type="submit" className="btn btn-full">Create Task</button>
-              </form>
-            </div>
+              {/* Submit Buttons */}
+              <div className="modal-actions">
+                <button type="button" className="btn btn-secondary" onClick={handleCloseModal}>
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className="btn btn-primary"
+                  disabled={isSubmitting || !newTask.title.trim()}
+                >
+                  {isSubmitting ? 'Creating...' : 'Create Task'}
+                </button>
+              </div>
+            </form>
           </div>
-        )}
-
-        {/* Task Detail Modal */}
-        {selectedTask && (
-          <TaskDetailModal 
-            task={selectedTask} 
-            onClose={() => setSelectedTask(null)} 
-          />
-        )}
-      </main>
-    </div>
-  );
-}
-
-// Enhanced Task Card Component
-function TaskCard({ task, onDragStart, onDragEnd, onClick, onDuplicate }) {
-  const [showQuickActions, setShowQuickActions] = useState(false);
-  const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done';
-  const completedSubtasks = task.subtasks?.filter(st => st.completed).length || 0;
-  const totalSubtasks = task.subtasks?.length || 0;
-
-  return (
-    <div 
-      className={`task-card ${isOverdue ? 'overdue-card' : ''} ${task.taskType === 'team' ? 'team-task-card' : 'personal-task-card'}`}
-      draggable
-      onDragStart={(e) => onDragStart(e, task)}
-      onDragEnd={onDragEnd}
-      onClick={onClick}
-      onMouseEnter={() => setShowQuickActions(true)}
-      onMouseLeave={() => setShowQuickActions(false)}
-    >
-      {/* Task Type Badge */}
-      {task.taskType === 'team' && (
-        <div className="task-type-badge">
-          <FaUsers /> Team
         </div>
       )}
 
-      <div className="task-header">
-        <span className={`priority-tag ${task.priority.toLowerCase()}`}>{task.priority}</span>
-        <div className="task-actions">
-          {showQuickActions && (
-            <button 
-              className="quick-action-btn" 
-              onClick={(e) => { e.stopPropagation(); onDuplicate(task); }}
-              title="Duplicate task"
-            >
-              <FaCopy />
-            </button>
-          )}
-          <button className="more-options" onClick={(e) => e.stopPropagation()}>
-            <FaEllipsisH />
-          </button>
-        </div>
-      </div>
-      
-      <h3>{task.title}</h3>
-      
-      {task.description && (
-        <p className="task-excerpt">{task.description.substring(0, 60)}...</p>
+      {/* Task Detail Drawer */}
+      {selectedTaskForDrawer && (
+        <TaskDetailDrawer
+          task={selectedTaskForDrawer}
+          onClose={() => setSelectedTaskForDrawer(null)}
+          onTaskUpdate={(updatedTask) => {
+            setSelectedTaskForDrawer(updatedTask);
+          }}
+        />
       )}
-
-      {task.tags && task.tags.length > 0 && (
-        <div className="task-tags">
-          {task.tags.slice(0, 2).map((tag, idx) => (
-            <span key={idx} className="mini-tag">{tag}</span>
-          ))}
-          {task.tags.length > 2 && <span className="mini-tag">+{task.tags.length - 2}</span>}
-        </div>
-      )}
-
-      {totalSubtasks > 0 && (
-        <div className="task-progress">
-          <div className="progress-mini">
-            <div 
-              className="progress-mini-fill" 
-              style={{ width: `${(completedSubtasks / totalSubtasks) * 100}%` }}
-            ></div>
-          </div>
-          <span className="progress-text">{completedSubtasks}/{totalSubtasks}</span>
-        </div>
-      )}
-
-      <div className="task-footer">
-        <div className="assignees">
-          {task.assignees.slice(0, 3).map((assignee, index) => (
-            <span key={index} className="mini-avatar" title={assignee.name}>{assignee.id}</span>
-          ))}
-          {task.assignees.length > 3 && (
-            <span className="mini-avatar more-assignees">+{task.assignees.length - 3}</span>
-          )}
-        </div>
-        {task.dueDate && (
-          <span className={`due-date ${isOverdue ? 'overdue' : ''}`}>
-            {new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-          </span>
-        )}
-      </div>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { useApp } from '../context/AppContext';
 import './TaskDetailModal.css';
 
 function TaskDetailModal({ task, onClose }) {
-  const { updateTask, deleteTask, addComment, toggleSubtask, currentUser } = useApp();
+  const { updateTask, deleteTask, addComment, toggleSubtask } = useApp();
   
   const [editMode, setEditMode] = useState(false);
   const [editedTask, setEditedTask] = useState(task);

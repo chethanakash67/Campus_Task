@@ -18,7 +18,12 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 // ==================== MIDDLEWARE ====================
 app.use(cors({
-  origin: [FRONTEND_URL, 'http://localhost:5174', 'http://localhost:3000'],
+  origin: [
+    FRONTEND_URL,
+    'http://localhost:5174',
+    'http://localhost:3000',
+    'http://localhost:5176'
+  ],
   credentials: true
 }));
 app.use(express.json());
@@ -79,10 +84,58 @@ pool.on('error', (err) => {
   process.exit(-1);
 });
 
-// Test database connection
+// Test database connection and run migrations
 pool.connect()
-  .then(client => {
+  .then(async (client) => {
     console.log('✅ Database connection successful');
+    
+    // Run migration to add completed_late status
+    try {
+      // Drop and recreate the constraint to allow completed_late
+      await client.query(`
+        ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_status_check;
+        ALTER TABLE tasks ADD CONSTRAINT tasks_status_check 
+          CHECK (status IN ('todo', 'in-progress', 'done', 'completed_late'));
+      `);
+      console.log('✅ Database migration: completed_late status enabled');
+    } catch (migrationErr) {
+      // Constraint might not exist or already updated, that's okay
+      console.log('ℹ️  Database migration note:', migrationErr.message);
+    }
+    
+    // Add progress and last_progress_update columns to tasks
+    try {
+      await client.query(`
+        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS progress INTEGER DEFAULT 0;
+        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS last_progress_update TIMESTAMP;
+      `);
+      console.log('✅ Database migration: progress columns added');
+    } catch (migrationErr) {
+      console.log('ℹ️  Progress migration note:', migrationErr.message);
+    }
+    
+    // Create task_activity table for activity timeline
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS task_activity (
+          id SERIAL PRIMARY KEY,
+          task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+          user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          activity_type VARCHAR(50) NOT NULL,
+          message TEXT NOT NULL,
+          old_value TEXT,
+          new_value TEXT,
+          note TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_task_activity_task_id ON task_activity(task_id);
+        CREATE INDEX IF NOT EXISTS idx_task_activity_created_at ON task_activity(created_at);
+      `);
+      console.log('✅ Database migration: task_activity table created');
+    } catch (migrationErr) {
+      console.log('ℹ️  Activity table migration note:', migrationErr.message);
+    }
+    
     client.release();
   })
   .catch(err => {
@@ -202,10 +255,13 @@ async function sendOTPEmail(email, name, otp, purpose = 'verify') {
 async function getCompleteTask(taskId) {
   const result = await pool.query(`
     SELECT t.*, 
+      creator.name as creator_name,
+      team.name as team_name,
       COALESCE(
         json_agg(DISTINCT jsonb_build_object(
           'id', u.id,
           'name', u.name,
+          'email', u.email,
           'type', 'user'
         )) FILTER (WHERE u.id IS NOT NULL),
         '[]'
@@ -233,6 +289,8 @@ async function getCompleteTask(taskId) {
         '[]'
       ) as comments
     FROM tasks t
+    LEFT JOIN users creator ON t.created_by = creator.id
+    LEFT JOIN teams team ON t.team_id = team.id
     LEFT JOIN task_assignees ta ON t.id = ta.task_id
     LEFT JOIN users u ON ta.user_id = u.id
     LEFT JOIN task_tags tt ON t.id = tt.task_id
@@ -240,10 +298,33 @@ async function getCompleteTask(taskId) {
     LEFT JOIN comments c ON t.id = c.task_id
     LEFT JOIN users cu ON c.user_id = cu.id
     WHERE t.id = $1
-    GROUP BY t.id
+    GROUP BY t.id, creator.name, team.name
   `, [taskId]);
 
-  return result.rows[0];
+  if (!result.rows[0]) return null;
+  
+  const task = result.rows[0];
+  return {
+    id: task.id,
+    title: task.title,
+    description: task.description,
+    priority: task.priority,
+    status: task.status,
+    taskType: task.task_type,
+    dueDate: task.due_date,
+    teamId: task.team_id,
+    teamName: task.team_name,
+    createdBy: task.created_by,
+    creatorName: task.creator_name,
+    progress: task.progress || 0,
+    lastProgressUpdate: task.last_progress_update,
+    createdAt: task.created_at,
+    updatedAt: task.updated_at,
+    assignees: task.assignees,
+    tags: task.tags,
+    subtasks: task.subtasks,
+    comments: task.comments
+  };
 }
 // Helper function to create notification (should be with other helpers)
 async function createNotification(userId, type, title, message, link = null, metadata = {}) {
@@ -343,7 +424,28 @@ app.post('/api/auth/request-otp-register', async (req, res) => {
     );
 
     const emailSent = await sendOTPEmail(email, name, otp, 'register');
-    // Update team
+    
+    if (emailSent) {
+      res.json({ 
+        message: 'OTP sent successfully',
+        email: email
+      });
+    } else {
+      // Email not configured - for development, still allow registration
+      console.log(`📧 Development mode - OTP for ${email}: ${otp}`);
+      res.json({ 
+        message: 'OTP generated (check server console in dev mode)',
+        email: email,
+        devMode: true
+      });
+    }
+  } catch (error) {
+    console.error('Request OTP Register error:', error);
+    res.status(500).json({ error: 'Failed to send OTP. Please try again.' });
+  }
+});
+
+// Update team
 app.put('/api/teams/:id', authenticateToken, async (req, res) => {
   const client = await pool.connect();
   try {
@@ -466,23 +568,6 @@ app.put('/api/teams/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ error: error.message });
   } finally {
     client.release();
-  }
-});
-    
-    // In dev mode, return OTP in response if email fails
-    if (!emailSent) {
-      return res.json({ 
-        message: 'OTP generated (Check console/response in Dev)',
-        email,
-        devMode: true,
-        otp: process.env.NODE_ENV !== 'production' ? otp : undefined
-      });
-    }
-
-    res.json({ message: 'OTP sent to your email', email });
-  } catch (error) {
-    console.error('Request OTP error:', error);
-    res.status(500).json({ error: error.message || 'Server error' });
   }
 });
 
@@ -1059,7 +1144,7 @@ app.delete('/api/teams/:id', authenticateToken, async (req, res) => {
 
 // ==================== TASK ROUTES ====================
 
-// Get assigned tasks
+// Get tasks assigned TO the current user
 app.get('/api/tasks/assigned', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(`
@@ -1075,17 +1160,54 @@ app.get('/api/tasks/assigned', authenticateToken, async (req, res) => {
   }
 });
 
+// Get tasks CREATED BY the current user (tasks I assigned to others)
+app.get('/api/tasks/created', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT t.*, team.name as team_name,
+        COALESCE(
+          json_agg(DISTINCT jsonb_build_object(
+            'id', u.id,
+            'name', u.name,
+            'email', u.email
+          )) FILTER (WHERE u.id IS NOT NULL),
+          '[]'
+        ) as assignees
+      FROM tasks t
+      LEFT JOIN teams team ON t.team_id = team.id
+      LEFT JOIN task_assignees ta ON t.id = ta.task_id
+      LEFT JOIN users u ON ta.user_id = u.id
+      WHERE t.created_by = $1
+      GROUP BY t.id, team.name
+      ORDER BY t.created_at DESC
+    `, [req.user.id]);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching created tasks:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // Get user's tasks with filters
 app.get('/api/tasks', authenticateToken, async (req, res) => {
   try {
     const { type, teamId } = req.query;
     let query = `
       SELECT t.*, 
-        COALESCE(json_agg(DISTINCT tt.tag_name) FILTER (WHERE tt.tag_name IS NOT NULL), '[]') as tags
+        COALESCE(json_agg(DISTINCT tt.tag_name) FILTER (WHERE tt.tag_name IS NOT NULL), '[]') as tags,
+        COALESCE(
+          json_agg(DISTINCT jsonb_build_object(
+            'id', u.id,
+            'name', u.name,
+            'type', 'user'
+          )) FILTER (WHERE u.id IS NOT NULL),
+          '[]'
+        ) as assignees
       FROM tasks t
       LEFT JOIN task_assignees ta ON t.id = ta.task_id
+      LEFT JOIN users u ON ta.user_id = u.id
       LEFT JOIN task_tags tt ON t.id = tt.task_id
-      WHERE ta.user_id = $1
+      WHERE t.id IN (SELECT task_id FROM task_assignees WHERE user_id = $1)
     `;
     const params = [req.user.id];
 
@@ -1113,13 +1235,110 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
     );
     const task = taskResult.rows[0];
 
-    // Assign Creator
-    await client.query('INSERT INTO task_assignees (task_id, user_id) VALUES ($1, $2)', [task.id, req.user.id]);
+    // For personal tasks, always assign creator
+    // For team tasks, only assign creator if they are in the assignees list
+    const isTeamTask = taskType === 'team' && teamId;
+    const creatorInAssignees = assignees && assignees.some(a => a.id === req.user.id);
+    
+    if (!isTeamTask || creatorInAssignees) {
+      await client.query('INSERT INTO task_assignees (task_id, user_id) VALUES ($1, $2)', [task.id, req.user.id]);
+    }
+
+    // Get team name if team task
+    let teamName = null;
+    if (teamId) {
+      const teamResult = await client.query('SELECT name FROM teams WHERE id = $1', [teamId]);
+      teamName = teamResult.rows[0]?.name;
+    }
+
+    // Get creator name
+    const creatorResult = await client.query('SELECT name FROM users WHERE id = $1', [req.user.id]);
+    const creatorName = creatorResult.rows[0]?.name || 'A team member';
 
     if (assignees && assignees.length > 0) {
       for (const assignee of assignees) {
-        if(assignee.id !== req.user.id) {
-            await client.query('INSERT INTO task_assignees (task_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [task.id, assignee.id]);
+        // Skip creator if already added above, otherwise add the assignee
+        if (assignee.id === req.user.id && (!isTeamTask || creatorInAssignees)) {
+          continue; // Already added above
+        }
+        
+        await client.query('INSERT INTO task_assignees (task_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [task.id, assignee.id]);
+        
+        // Send notification only to others (not the creator)
+        if (assignee.id !== req.user.id) {
+          // Create notification for assigned user
+          await createNotification(
+            assignee.id,
+            'task_assigned',
+            'New Task Assigned',
+            `${creatorName} assigned you a task: "${title}"`,
+            `/assigned-tasks`,
+            { taskId: task.id, taskTitle: title, teamId, teamName }
+          );
+
+          // Send email notification to assigned user
+          if (transporter && emailConfigured) {
+            try {
+              const userResult = await client.query('SELECT email, name FROM users WHERE id = $1', [assignee.id]);
+              const assignedUser = userResult.rows[0];
+              
+              if (assignedUser?.email) {
+                await transporter.sendMail({
+                  from: process.env.EMAIL_USER,
+                  to: assignedUser.email,
+                  subject: `📋 New Task Assigned: ${title}`,
+                  html: `
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+                      <div style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                        <h2 style="color: #646cff; margin-top: 0;">📋 New Task Assigned to You</h2>
+                        <p style="font-size: 16px; color: #333;">
+                          Hi <strong>${assignedUser.name}</strong>,
+                        </p>
+                        <p style="color: #666;">
+                          <strong>${creatorName}</strong> has assigned you a new task${teamName ? ` in <strong>${teamName}</strong>` : ''}:
+                        </p>
+                        <div style="background: #f4f4f4; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #646cff;">
+                          <h3 style="margin: 0 0 10px 0; color: #333;">${title}</h3>
+                          ${description ? `<p style="margin: 0 0 10px 0; color: #666;">${description}</p>` : ''}
+                          <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-top: 15px;">
+                            <span style="background: ${priority === 'High' ? '#fee2e2' : priority === 'Medium' ? '#fef3c7' : '#d1fae5'}; 
+                                         color: ${priority === 'High' ? '#dc2626' : priority === 'Medium' ? '#d97706' : '#059669'}; 
+                                         padding: 4px 12px; border-radius: 4px; font-size: 14px; font-weight: 500;">
+                              ${priority} Priority
+                            </span>
+                            ${dueDate ? `
+                              <span style="background: #e0e7ff; color: #4338ca; padding: 4px 12px; border-radius: 4px; font-size: 14px;">
+                                Due: ${new Date(dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              </span>
+                            ` : ''}
+                            ${teamName ? `
+                              <span style="background: #f3e8ff; color: #7c3aed; padding: 4px 12px; border-radius: 4px; font-size: 14px;">
+                                Team: ${teamName}
+                              </span>
+                            ` : ''}
+                          </div>
+                        </div>
+                        <div style="text-align: center; margin: 30px 0;">
+                          <a href="${FRONTEND_URL}/assigned-tasks" 
+                             style="display: inline-block; background: #646cff; color: white; padding: 14px 40px; 
+                                    text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+                            View Task
+                          </a>
+                        </div>
+                        <p style="color: #999; font-size: 13px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+                          You received this email because you were assigned a task on CampusTasks.
+                        </p>
+                      </div>
+                    </div>
+                  `
+                });
+                console.log(`✅ Task assignment email sent to ${assignedUser.email}`);
+              }
+            } catch (emailError) {
+              console.error('Task assignment email error:', emailError);
+              // Don't fail the task creation if email fails
+            }
+          }
         }
       }
     }
@@ -1152,6 +1371,21 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
+    
+    // Check if user is assigned to this task (not just creator)
+    const assigneeCheck = await pool.query(
+      'SELECT * FROM task_assignees WHERE task_id = $1 AND user_id = $2',
+      [id, req.user.id]
+    );
+    
+    if (assigneeCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'You are not authorized to update this task' });
+    }
+    
+    // Get current task to check for late submission
+    const currentTask = await pool.query('SELECT * FROM tasks WHERE id = $1', [id]);
+    const task = currentTask.rows[0];
+    
     const dbUpdates = {};
     
     // Only allow updating tasks table fields here
@@ -1164,18 +1398,31 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
       }
     });
 
+    // Check for late submission: if marking as 'done' and past due date
+    if (dbUpdates.status === 'done' && task.due_date) {
+      const dueDate = new Date(task.due_date);
+      dueDate.setHours(23, 59, 59, 999);
+      const now = new Date();
+      
+      if (now > dueDate) {
+        // Late submission - change status to 'completed_late'
+        dbUpdates.status = 'completed_late';
+      }
+    }
+
     if (Object.keys(dbUpdates).length > 0) {
-        const setClause = Object.keys(dbUpdates).map((key, i) => `${key} = ${i + 1}`).join(', ');
-        const values = Object.values(dbUpdates);
-        await pool.query(
-          `UPDATE tasks SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = ${values.length + 1}`,
-          [...values, id]
-        );
+      const setClause = Object.keys(dbUpdates).map((key, i) => `${key} = $${i + 1}`).join(', ');
+      const values = Object.values(dbUpdates);
+      await pool.query(
+        `UPDATE tasks SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = $${values.length + 1}`,
+        [...values, id]
+      );
     }
     
     const updatedTask = await getCompleteTask(id);
     res.json(updatedTask);
   } catch (error) {
+    console.error('Update task error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -1210,6 +1457,190 @@ app.put('/api/tasks/:taskId/subtasks/:subtaskId', authenticateToken, async (req,
     const updatedTask = await getCompleteTask(req.params.taskId);
     res.json(updatedTask);
   } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ==================== TASK PROGRESS & ACTIVITY ====================
+
+// Update task progress
+app.post('/api/tasks/:id/progress', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    
+    const { id } = req.params;
+    const { progress, note } = req.body;
+    
+    // Check if user is assigned to this task
+    const assigneeCheck = await client.query(
+      'SELECT * FROM task_assignees WHERE task_id = $1 AND user_id = $2',
+      [id, req.user.id]
+    );
+    
+    if (assigneeCheck.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'Only assigned users can update progress' });
+    }
+    
+    // Get task details for notifications
+    const taskResult = await client.query(`
+      SELECT t.*, u.name as creator_name, u.email as creator_email
+      FROM tasks t
+      LEFT JOIN users u ON t.created_by = u.id
+      WHERE t.id = $1
+    `, [id]);
+    
+    if (taskResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    const task = taskResult.rows[0];
+    const oldProgress = task.progress || 0;
+    
+    // Update task progress
+    await client.query(
+      'UPDATE tasks SET progress = $1, last_progress_update = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [progress, id]
+    );
+    
+    // Get user name for activity log
+    const userResult = await client.query('SELECT name FROM users WHERE id = $1', [req.user.id]);
+    const userName = userResult.rows[0]?.name || 'Unknown User';
+    
+    // Create activity log entry
+    await client.query(`
+      INSERT INTO task_activity (task_id, user_id, activity_type, message, old_value, new_value, note)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `, [
+      id,
+      req.user.id,
+      'progress_update',
+      `${userName} updated progress from ${oldProgress}% to ${progress}%`,
+      oldProgress.toString(),
+      progress.toString(),
+      note || null
+    ]);
+    
+    await client.query('COMMIT');
+    
+    // Send email notification to task owner if different from updater
+    if (task.created_by !== req.user.id && transporter && emailConfigured) {
+      try {
+        // Get team name if applicable
+        let teamName = null;
+        if (task.team_id) {
+          const teamResult = await pool.query('SELECT name FROM teams WHERE id = $1', [task.team_id]);
+          teamName = teamResult.rows[0]?.name;
+        }
+        
+        await transporter.sendMail({
+          from: process.env.EMAIL_USER,
+          to: task.creator_email,
+          subject: `📊 Task Progress Update: ${task.title}`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+              <div style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <h2 style="color: #646cff; margin-top: 0;">📊 Task Progress Updated</h2>
+                <p style="font-size: 16px; color: #333;">
+                  Hi <strong>${task.creator_name}</strong>,
+                </p>
+                <p style="color: #666;">
+                  <strong>${userName}</strong> has updated the progress on your task${teamName ? ` in <strong>${teamName}</strong>` : ''}:
+                </p>
+                <div style="background: #f4f4f4; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #646cff;">
+                  <h3 style="margin: 0 0 15px 0; color: #333;">${task.title}</h3>
+                  <div style="margin-bottom: 15px;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                      <span style="color: #666;">Progress:</span>
+                      <span style="font-weight: bold; color: ${progress >= 100 ? '#10b981' : '#646cff'};">${oldProgress}% → ${progress}%</span>
+                    </div>
+                    <div style="background: #e5e7eb; border-radius: 4px; height: 8px; overflow: hidden;">
+                      <div style="background: linear-gradient(90deg, #646cff, #8b5cf6); height: 100%; width: ${progress}%; transition: width 0.3s;"></div>
+                    </div>
+                  </div>
+                  ${note ? `
+                    <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
+                      <p style="margin: 0; color: #666; font-size: 14px;"><strong>Note:</strong></p>
+                      <p style="margin: 5px 0 0 0; color: #333; font-style: italic;">"${note}"</p>
+                    </div>
+                  ` : ''}
+                </div>
+                <div style="text-align: center; margin: 30px 0;">
+                  <a href="${FRONTEND_URL}/tasks" 
+                     style="display: inline-block; background: #646cff; color: white; padding: 14px 40px; 
+                            text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+                    View Task
+                  </a>
+                </div>
+                <p style="color: #999; font-size: 13px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+                  You received this email because you are the owner of this task on CampusTasks.
+                </p>
+              </div>
+            </div>
+          `
+        });
+        console.log(`✅ Progress update email sent to ${task.creator_email}`);
+      } catch (emailError) {
+        console.error('Progress update email error:', emailError);
+        // Don't fail the request if email fails
+      }
+    }
+    
+    const updatedTask = await getCompleteTask(id);
+    res.json(updatedTask);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Update progress error:', error);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    client.release();
+  }
+});
+
+// Get task activity log
+app.get('/api/tasks/:id/activity', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Check if user has access to this task
+    const taskCheck = await pool.query(`
+      SELECT t.* FROM tasks t
+      LEFT JOIN task_assignees ta ON t.id = ta.task_id
+      WHERE t.id = $1 AND (t.created_by = $2 OR ta.user_id = $2)
+    `, [id, req.user.id]);
+    
+    if (taskCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Get activity log
+    const activityResult = await pool.query(`
+      SELECT 
+        ta.*,
+        u.name as user_name
+      FROM task_activity ta
+      LEFT JOIN users u ON ta.user_id = u.id
+      WHERE ta.task_id = $1
+      ORDER BY ta.created_at DESC
+      LIMIT 50
+    `, [id]);
+    
+    const activities = activityResult.rows.map(a => ({
+      id: a.id,
+      type: a.activity_type,
+      message: a.message,
+      userName: a.user_name,
+      oldValue: a.old_value,
+      newValue: a.new_value,
+      note: a.note,
+      createdAt: a.created_at
+    }));
+    
+    res.json(activities);
+  } catch (error) {
+    console.error('Get activity error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });

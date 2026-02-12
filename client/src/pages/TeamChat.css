@@ -145,6 +145,31 @@
   color: #ccc;
 }
 
+.bookmarks-panel {
+  margin: 0 20px 20px;
+  padding: 12px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: 8px;
+}
+
+.bookmark-jump-btn {
+  width: 100%;
+  margin-top: 8px;
+  text-align: left;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.bookmark-jump-btn span {
+  font-weight: 700;
+}
+
 .chat-main {
   flex: 1;
   display: flex;
@@ -171,6 +196,62 @@
   margin: 5px 0 0 0;
   color: #666;
   font-size: 0.9rem;
+}
+
+.chat-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.header-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #d7dbe8;
+  background: #fff;
+  color: #2f3a4f;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.header-action-btn:hover {
+  border-color: #646cff;
+  color: #646cff;
+}
+
+.header-action-btn.meet {
+  background: #646cff;
+  border-color: #646cff;
+  color: #fff;
+}
+
+.header-action-btn.meet:hover {
+  background: #535bf2;
+}
+
+.chat-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f6f8fc;
+  border: 1px solid #dbe2f0;
+  border-radius: 999px;
+  padding: 7px 12px;
+  color: #5a647d;
+}
+
+.chat-search-input {
+  border: none;
+  background: transparent;
+  outline: none;
+  min-width: 160px;
+  font-size: 0.85rem;
 }
 
 .messages-container {
@@ -359,6 +440,19 @@
 
 .message-actions svg:hover {
   color: #646cff;
+}
+
+.bookmark-icon {
+  cursor: pointer;
+  color: #a0a6b7;
+}
+
+.bookmark-icon.active {
+  color: #f59e0b;
+}
+
+.message-highlight .message-bubble {
+  box-shadow: 0 0 0 2px #f59e0b;
 }
 
 .typing-indicator {
@@ -618,6 +712,11 @@
   
   .send-button svg {
     margin: 0;
+  }
+
+  .header-action-btn {
+    padding: 7px 10px;
+    font-size: 0.78rem;
   }
 }
 

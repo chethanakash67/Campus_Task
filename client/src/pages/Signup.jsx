@@ -1,464 +1,299 @@
-// client/src/pages/Signup.jsx - WITH OTP VERIFICATION
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import './Signup.css';
+import { User, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowLeft, CheckCircle, Users, Calendar, Check } from 'lucide-react';
+import '../styles/auth.css';
 
 function Signup() {
   const navigate = useNavigate();
-  const [step, setStep] = useState(1); // 1: Form, 2: OTP Verification
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    confirmPassword: ''
-  });
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
-  const [resending, setResending] = useState(false);
-  const [countdown, setCountdown] = useState(600); // 10 minutes in seconds
-  const [timerActive, setTimerActive] = useState(false);
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
-  // Pre-fill email if coming from invitation
-useEffect(() => {
-  const invitationEmail = localStorage.getItem('invitationEmail');
-  if (invitationEmail) {
-    setFormData(prev => ({ ...prev, email: invitationEmail }));
-  }
-}, []);
-  // Countdown timer
-  useEffect(() => {
-    if (timerActive && countdown > 0) {
-      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
-      return () => clearTimeout(timer);
-    } else if (countdown === 0) {
-      setError('OTP has expired. Please request a new one.');
-      setTimerActive(false);
-    }
-  }, [countdown, timerActive]);
-
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  const getPasswordStrength = () => {
+    if (!password) return null;
+    if (password.length < 6) return 'weak';
+    if (password.length < 10 || !/[A-Z]/.test(password) || !/[0-9]/.test(password)) return 'medium';
+    return 'strong';
   };
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-  };
+  const passwordStrength = getPasswordStrength();
 
-  const handleOtpChange = (element, index) => {
-    if (isNaN(element.value)) return false;
-
-    setOtp([...otp.map((d, idx) => (idx === index ? element.value : d))]);
-
-    // Focus next input
-    if (element.value !== '' && element.nextSibling) {
-      element.nextSibling.focus();
-    }
-  };
-
-  const handleOtpKeyDown = (e, index) => {
-    if (e.key === 'Backspace' && !otp[index] && e.target.previousSibling) {
-      e.target.previousSibling.focus();
-    }
-  };
-
-  const handleSubmitForm = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    setMessage('');
 
-    // Validation
-    if (!formData.name || !formData.email || !formData.password || !formData.confirmPassword) {
+    if (!name || !email || !password || !confirmPassword) {
       setError('Please fill in all fields');
       return;
     }
 
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters long');
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters');
       return;
     }
 
-    if (formData.password !== formData.confirmPassword) {
+    if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;
     }
 
     try {
       setLoading(true);
-      const response = await axios.post(`${API_URL}/auth/request-otp-register`, {
-        name: formData.name,
-        email: formData.email,
-        password: formData.password
-      });
-
-      if (response.data.devMode) {
-        setMessage(`OTP sent! (Dev Mode: ${response.data.otp})`);
-      } else {
-        setMessage('OTP sent to your email! Please check your inbox.');
-      }
-
-      setStep(2);
-      setCountdown(600);
-      setTimerActive(true);
-    } catch (err) {
-      console.error('Registration error:', err);
-      setError(err.response?.data?.error || 'Failed to send OTP. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyOtp = async (e) => {
-    e.preventDefault();
-    setError('');
-    setMessage('');
-
-    const otpValue = otp.join('');
-    if (otpValue.length !== 6) {
-      setError('Please enter the complete 6-digit OTP');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const response = await axios.post(`${API_URL}/auth/verify-register`, {
-        name: formData.name,
-        email: formData.email,
-        password: formData.password,
-        otp: otpValue
-      });
-
-      // Store token and user
-      localStorage.setItem('campusToken', response.data.token);
-      localStorage.setItem('campusUser', JSON.stringify(response.data.user));
-
-      // Check for pending invitation
-      const pendingInvitation = localStorage.getItem('pendingInvitation');
       
-      if (pendingInvitation) {
-        setMessage('Account created! Accepting team invitation...');
-        
-        try {
-          // Accept the invitation
-          const inviteResponse = await axios.post(`${API_URL}/teams/accept-invitation`, 
-            { token: pendingInvitation, userId: response.data.user.id },
-            { headers: { Authorization: `Bearer ${response.data.token}` }}
-          );
-          
-          // Clear pending invitation
-          localStorage.removeItem('pendingInvitation');
-          localStorage.removeItem('invitationEmail');
-          
-          // Show appropriate message
-          if (inviteResponse.data.alreadyMember) {
-            setMessage('ℹ️ ' + inviteResponse.data.message + ' Redirecting...');
-          } else {
-            setMessage('✅ ' + inviteResponse.data.message + ' Redirecting...');
-          }
-          
-          setTimeout(() => {
-            navigate('/teams', { replace: true });
-          }, 1500);
-        } catch (inviteError) {
-          console.error('Error accepting invitation:', inviteError);
-          const errorMsg = inviteError.response?.data?.error || 'Failed to accept invitation';
-          
-          // If email mismatch, clear invitation and go to dashboard
-          if (errorMsg.includes('different email')) {
-            localStorage.removeItem('pendingInvitation');
-            localStorage.removeItem('invitationEmail');
-            setError('⚠️ ' + errorMsg);
-            setTimeout(() => {
-              navigate('/dashboard', { replace: true });
-            }, 2000);
-          } else {
-            // Other errors - still clear and go to dashboard
-            localStorage.removeItem('pendingInvitation');
-            localStorage.removeItem('invitationEmail');
-            setError('⚠️ ' + errorMsg);
-            setTimeout(() => {
-              navigate('/dashboard', { replace: true });
-            }, 2000);
-          }
-        }
-      } else {
-        setMessage('Registration successful! Redirecting...');
-        setTimeout(() => {
-          navigate('/dashboard', { replace: true });
-        }, 1000);
-      }
-    } catch (err) {
-      console.error('OTP verification error:', err);
-      setError(err.response?.data?.error || 'Invalid OTP. Please try again.');
-      setOtp(['', '', '', '', '', '']);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResendOtp = async () => {
-    try {
-      setResending(true);
-      setError('');
-      setMessage('');
-
-      const response = await axios.post(`${API_URL}/auth/resend-otp`, {
-        email: formData.email,
-        purpose: 'register'
+      // Store password temporarily for verification step
+      localStorage.setItem('pendingPassword', password);
+      localStorage.setItem('pendingName', name);
+      
+      await axios.post(API_URL + '/auth/request-otp-register', {
+        name: name,
+        email: email,
+        password: password
       });
 
-      if (response.data.devMode) {
-        setMessage(`New OTP sent! (Dev Mode: ${response.data.otp})`);
-      } else {
-        setMessage('New OTP sent to your email!');
-      }
-
-      setOtp(['', '', '', '', '', '']);
-      setCountdown(600);
-      setTimerActive(true);
+      localStorage.setItem('pendingVerificationEmail', email);
+      navigate('/verify-otp', { state: { email: email, fromSignup: true } });
     } catch (err) {
-      setError('Failed to resend OTP. Please try again.');
+      console.error('Signup error:', err);
+      setError(err.response?.data?.error || 'Registration failed. Please try again.');
     } finally {
-      setResending(false);
+      setLoading(false);
     }
   };
 
   const handleGoogleSignup = () => {
-    window.location.href = `${API_URL}/auth/google`;
+    window.location.href = API_URL.replace('/api', '') + '/api/auth/google';
   };
 
-  if (step === 2) {
-    return (
-      <div className="auth-container">
-        <div className="background-grid"></div>
-        <div className="auth-box">
-          <h2>Verify Your Email</h2>
-          <p className="auth-subtitle">
-            We've sent a 6-digit code to <strong>{formData.email}</strong>
+  return (
+    <div className="auth-page">
+      <div className="auth-branding">
+        <div className="auth-branding-content">
+          <div className="auth-branding-logo">
+            <div className="auth-branding-logo-icon">C</div>
+            <span className="auth-branding-logo-text">
+              CampusTasks<span className="auth-branding-logo-dot">.</span>
+            </span>
+          </div>
+          
+          <h1 className="auth-branding-tagline">
+            Manage Tasks.<br />
+            <span>Ace Your Semester.</span>
+          </h1>
+          
+          <p className="auth-branding-description">
+            The modern task management platform built for students and teams. 
+            Organize assignments, track deadlines, and collaborate seamlessly.
           </p>
+          
+          <div className="auth-branding-features">
+            <div className="auth-branding-feature">
+              <div className="auth-branding-feature-icon">
+                <CheckCircle size={22} />
+              </div>
+              <div className="auth-branding-feature-text">
+                <div className="auth-branding-feature-title">Smart Task Management</div>
+                <div className="auth-branding-feature-desc">Organize tasks with priorities and deadlines</div>
+              </div>
+            </div>
+            
+            <div className="auth-branding-feature">
+              <div className="auth-branding-feature-icon">
+                <Users size={22} />
+              </div>
+              <div className="auth-branding-feature-text">
+                <div className="auth-branding-feature-title">Team Collaboration</div>
+                <div className="auth-branding-feature-desc">Work together with classmates and groups</div>
+              </div>
+            </div>
+            
+            <div className="auth-branding-feature">
+              <div className="auth-branding-feature-icon">
+                <Calendar size={22} />
+              </div>
+              <div className="auth-branding-feature-text">
+                <div className="auth-branding-feature-title">Deadline Tracking</div>
+                <div className="auth-branding-feature-desc">Never miss an assignment deadline again</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
-          <div className="otp-info-box">
-            <span className="otp-icon">📧</span>
-            <p>Enter the verification code from your email</p>
+      <div className="auth-form-side">
+        <Link to="/" className="auth-back">
+          <ArrowLeft className="auth-back-icon" size={18} />
+          Back to Home
+        </Link>
+
+        <div className="auth-form-container">
+          <div className="auth-mobile-logo">
+            <div className="auth-mobile-logo-icon">C</div>
+            <span className="auth-mobile-logo-text">
+              CampusTasks<span className="auth-mobile-logo-dot">.</span>
+            </span>
           </div>
 
-          {timerActive && countdown > 0 && (
-            <div className="countdown-timer">
-              OTP expires in: <strong>{formatTime(countdown)}</strong>
-            </div>
-          )}
+          <div className="auth-steps">
+            <div className="auth-step active">1</div>
+            <div className="auth-step-line"></div>
+            <div className="auth-step inactive">2</div>
+          </div>
 
-          <form onSubmit={handleVerifyOtp}>
+          <div className="auth-header">
+            <h1 className="auth-title">Create account</h1>
+            <p className="auth-subtitle">Get started with CampusTasks today</p>
+          </div>
+
+          <div className="auth-social">
+            <button className="auth-social-btn" onClick={handleGoogleSignup} type="button">
+              <img 
+                src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" 
+                alt="Google" 
+                className="auth-social-icon"
+              />
+              Continue with Google
+            </button>
+          </div>
+
+          <div className="auth-divider">
+            <span className="auth-divider-line"></span>
+            <span className="auth-divider-text">or</span>
+            <span className="auth-divider-line"></span>
+          </div>
+
+          <form onSubmit={handleSubmit} className="auth-form">
             {error && (
-              <div className="error-message" style={{
-                color: '#ff4444',
-                padding: '10px',
-                marginBottom: '15px',
-                backgroundColor: '#ffe6e6',
-                borderRadius: '4px',
-                fontSize: '0.9rem'
-              }}>
-                {error}
+              <div className="auth-message auth-message-error">
+                <AlertCircle className="auth-message-icon" size={18} />
+                <span>{error}</span>
               </div>
             )}
 
-            {message && (
-              <div className="success-message" style={{
-                color: '#00aa00',
-                padding: '10px',
-                marginBottom: '15px',
-                backgroundColor: '#e6ffe6',
-                borderRadius: '4px',
-                fontSize: '0.9rem'
-              }}>
-                {message}
-              </div>
-            )}
-
-            <div style={{
-              display: 'flex',
-              gap: '10px',
-              justifyContent: 'center',
-              marginBottom: '20px'
-            }}>
-              {otp.map((data, index) => (
+            <div className="auth-field">
+              <label className="auth-label">Full Name</label>
+              <div className="auth-input-icon-wrapper">
+                <User className="auth-input-icon" size={18} />
                 <input
-                  key={index}
                   type="text"
-                  maxLength="1"
-                  value={data}
-                  onChange={(e) => handleOtpChange(e.target, index)}
-                  onKeyDown={(e) => handleOtpKeyDown(e, index)}
-                  onFocus={(e) => e.target.select()}
+                  className="auth-input"
+                  placeholder="Enter your full name"
+                  value={name}
+                  onChange={(e) => { setName(e.target.value); setError(''); }}
                   disabled={loading}
-                  style={{
-                    width: '50px',
-                    height: '60px',
-                    fontSize: '24px',
-                    textAlign: 'center',
-                    border: '2px solid #ddd',
-                    borderRadius: '8px',
-                    outline: 'none',
-                    backgroundColor: '#2a2a2a',
-                    color: 'white'
-                  }}
+                  autoComplete="name"
                 />
-              ))}
+              </div>
             </div>
 
-            <button
-              type="submit"
-              className="btn btn-full"
-              disabled={loading || otp.join('').length !== 6}
+            <div className="auth-field">
+              <label className="auth-label">Email</label>
+              <div className="auth-input-icon-wrapper">
+                <Mail className="auth-input-icon" size={18} />
+                <input
+                  type="email"
+                  className="auth-input"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => { setEmail(e.target.value); setError(''); }}
+                  disabled={loading}
+                  autoComplete="email"
+                />
+              </div>
+            </div>
+
+            <div className="auth-field">
+              <label className="auth-label">Password</label>
+              <div className="auth-input-icon-wrapper auth-password-wrapper">
+                <Lock className="auth-input-icon" size={18} />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  className="auth-input"
+                  placeholder="Create a password"
+                  value={password}
+                  onChange={(e) => { setPassword(e.target.value); setError(''); }}
+                  disabled={loading}
+                  autoComplete="new-password"
+                  style={{ paddingRight: '48px' }}
+                />
+                <button
+                  type="button"
+                  className="auth-password-toggle"
+                  onClick={() => setShowPassword(!showPassword)}
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+              {passwordStrength && (
+                <div className="auth-password-strength">
+                  <div className="auth-password-strength-bar">
+                    <div className={'auth-password-strength-fill ' + passwordStrength}></div>
+                  </div>
+                  <span className={'auth-password-strength-text ' + passwordStrength}>
+                    {passwordStrength === 'weak' && 'Weak password'}
+                    {passwordStrength === 'medium' && 'Medium password'}
+                    {passwordStrength === 'strong' && 'Strong password'}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="auth-field">
+              <label className="auth-label">Confirm Password</label>
+              <div className="auth-input-icon-wrapper auth-password-wrapper">
+                <Lock className="auth-input-icon" size={18} />
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  className="auth-input"
+                  placeholder="Confirm your password"
+                  value={confirmPassword}
+                  onChange={(e) => { setConfirmPassword(e.target.value); setError(''); }}
+                  disabled={loading}
+                  autoComplete="new-password"
+                  style={{ paddingRight: '48px' }}
+                />
+                <button
+                  type="button"
+                  className="auth-password-toggle"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  tabIndex={-1}
+                >
+                  {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+              {confirmPassword && password && (
+                <div className="auth-password-match">
+                  {password === confirmPassword ? (
+                    <span className="auth-match-success">Passwords match</span>
+                  ) : (
+                    <span className="auth-match-error">Passwords do not match</span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <button 
+              type="submit" 
+              className={'auth-btn auth-btn-primary auth-btn-full' + (loading ? ' auth-btn-loading' : '')}
+              disabled={loading}
             >
-              {loading ? 'Verifying...' : 'Verify OTP'}
+              {loading ? '' : 'Continue'}
             </button>
           </form>
 
-          <div className="resend-section">
-            <p>Didn't receive the code?</p>
-            <button
-              onClick={handleResendOtp}
-              disabled={resending || countdown > 540}
-              className="btn-link"
-            >
-              {resending ? 'Resending...' : 'Resend OTP'}
-            </button>
-          </div>
-
-          <button
-            onClick={() => {
-              setStep(1);
-              setOtp(['', '', '', '', '', '']);
-              setError('');
-              setMessage('');
-              setTimerActive(false);
-            }}
-            className="btn btn-secondary"
-            style={{ width: '100%', marginTop: '10px' }}
-          >
-            ← Back to Signup
-          </button>
+          <p className="auth-footer">
+            Already have an account?{' '}
+            <Link to="/login" className="auth-footer-link">Sign in</Link>
+          </p>
         </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="auth-container">
-      <div className="background-grid"></div>
-      <div className="auth-box">
-        <div className="back-link-container">
-          <Link to="/" className="back-link">← Back to Home</Link>
-        </div>
-
-        <h2>Create Account</h2>
-{localStorage.getItem('pendingInvitation') ? (
-  <p className="auth-subtitle" style={{ color: '#646cff' }}>
-    ✨ Complete signup to join the team
-  </p>
-) : (
-  <p className="auth-subtitle">Join CampusTasks today</p>
-)}
-
-        <button className="btn-google" onClick={handleGoogleSignup} type="button">
-          <img
-            src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
-            alt="Google"
-            className="google-icon"
-          />
-          Sign up with Google
-        </button>
-
-        <div className="divider">
-          <span>OR</span>
-        </div>
-
-        <form onSubmit={handleSubmitForm}>
-          {error && (
-            <div className="error-message" style={{
-              color: '#ff4444',
-              padding: '10px',
-              marginBottom: '15px',
-              backgroundColor: '#ffe6e6',
-              borderRadius: '4px',
-              fontSize: '0.9rem'
-            }}>
-              {error}
-            </div>
-          )}
-
-          <div className="input-group">
-            <label>Full Name</label>
-            <input
-              type="text"
-              name="name"
-              placeholder="John Doe"
-              value={formData.name}
-              onChange={handleChange}
-              disabled={loading}
-              required
-            />
-          </div>
-
-          <div className="input-group">
-            <label>Email</label>
-            <input
-              type="email"
-              name="email"
-              placeholder="you@example.com"
-              value={formData.email}
-              onChange={handleChange}
-              disabled={loading}
-              required
-            />
-          </div>
-
-          <div className="input-group">
-            <label>Password</label>
-            <input
-              type="password"
-              name="password"
-              placeholder="••••••••"
-              value={formData.password}
-              onChange={handleChange}
-              disabled={loading}
-              required
-              minLength={6}
-            />
-          </div>
-
-          <div className="input-group">
-            <label>Confirm Password</label>
-            <input
-              type="password"
-              name="confirmPassword"
-              placeholder="••••••••"
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              disabled={loading}
-              required
-              minLength={6}
-            />
-          </div>
-
-          <button type="submit" className="btn btn-full" disabled={loading}>
-            {loading ? 'Creating Account...' : 'Continue to Verification'}
-          </button>
-        </form>
-
-        <p className="auth-switch">
-          Already have an account? <Link to="/login">Sign in</Link>
-        </p>
       </div>
     </div>
   );

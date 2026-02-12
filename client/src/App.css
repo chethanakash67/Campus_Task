@@ -1,5 +1,6 @@
 /* client/src/App.css */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import './styles/design-system.css';
 
 :root {
   /* Global Color Palette */

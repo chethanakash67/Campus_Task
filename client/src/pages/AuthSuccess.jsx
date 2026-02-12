@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
+import { FaCheckCircle, FaSpinner } from 'react-icons/fa';
 import { useApp } from '../context/AppContext';
 
 function AuthSuccess() {
@@ -45,11 +46,7 @@ function AuthSuccess() {
             localStorage.removeItem('invitationEmail');
             
             // Show appropriate message
-            if (inviteResponse.data.alreadyMember) {
-              alert('ℹ️ ' + inviteResponse.data.message);
-            } else {
-              alert('✅ ' + inviteResponse.data.message);
-            }
+            alert(inviteResponse.data.message);
             
             navigate('/teams', { replace: true });
           } catch (inviteError) {
@@ -59,7 +56,7 @@ function AuthSuccess() {
             if (errorMsg.includes('different email')) {
               localStorage.removeItem('pendingInvitation');
               localStorage.removeItem('invitationEmail');
-              alert('⚠️ ' + errorMsg + '\n\nYou can accept the invitation with the correct email account.');
+              alert(errorMsg + '\n\nYou can accept the invitation with the correct email account.');
               navigate('/dashboard', { replace: true });
             } else {
               // Other errors - still clear and go to dashboard
@@ -89,12 +86,12 @@ function AuthSuccess() {
       justifyContent: 'center', 
       alignItems: 'center', 
       height: '100vh',
-      fontSize: '1.5rem'
+      fontSize: '1.5rem',
+      flexDirection: 'column',
+      gap: '16px'
     }}>
-      <div>
-        <div style={{ textAlign: 'center', marginBottom: '20px' }}>✅</div>
-        <div>Logging you in...</div>
-      </div>
+      <FaCheckCircle size={40} color="#10b981" />
+      <div>Logging you in...</div>
     </div>
   );
 }

@@ -1,20 +1,18 @@
-// client/src/components/Sidebar.jsx - FIXED VERSION
-import React from 'react';
+// client/src/components/Sidebar.jsx - LOOMIO-INSPIRED UI VERSION
+import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import NotificationCenter from './NotificationCenter';
-// FIXED: Added missing FaTasks import
-import { MdDashboard, MdSettings } from 'react-icons/md';
-import { FaUserFriends, FaCalendarAlt, FaTasks } from 'react-icons/fa';
-import { FiLogOut } from 'react-icons/fi';
+import { MdDashboard, MdSettings, MdLogout, MdLeaderboard } from 'react-icons/md';
+import { FaUserFriends, FaCalendarAlt, FaTasks, FaChevronLeft, FaChevronRight, FaTrophy } from 'react-icons/fa';
 import '../pages/Dashboard.css';
 
 function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { currentUser, logout } = useApp();
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
-  // Helper to highlight the active link
   const isActive = (path) => location.pathname === path ? 'active' : '';
 
   const handleLogout = () => {
@@ -22,66 +20,93 @@ function Sidebar() {
     navigate('/login');
   };
 
-  const userInitials = currentUser?.avatar || currentUser?.name?.substring(0, 2).toUpperCase() || 'JD';
-  const userName = currentUser?.name || 'John Doe';
+  const userInitials = currentUser?.avatar || currentUser?.name?.substring(0, 2).toUpperCase() || 'U';
+  const userName = currentUser?.name || 'User';
+  const navItems = [
+    { path: '/dashboard', icon: MdDashboard, label: 'Dashboard' },
+    { path: '/teams', icon: FaUserFriends, label: 'Teams' },
+    { path: '/tasks', icon: FaTasks, label: 'Tasks' },
+    { path: '/calendar', icon: FaCalendarAlt, label: 'Calendar' },
+    { path: '/leaderboard', icon: FaTrophy, label: 'Leaderboard' },
+    { path: '/settings', icon: MdSettings, label: 'Settings' },
+  ];
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${isCollapsed ? 'sidebar-collapsed' : ''}`}>
+      {/* Header with Brand */}
       <div className="sidebar-header">
-  <h3>CampusTasks</h3>
-  <NotificationCenter />
-</div>
+        <div className="sidebar-brand">
+          <div className="brand-icon">CT</div>
+          {!isCollapsed && (
+            <div>
+              <h3>CampusTasks</h3>
+              <span className="sidebar-header-subtitle">Task Hub</span>
+            </div>
+          )}
+        </div>
+        <div className="sidebar-header-actions">
+          {!isCollapsed && <NotificationCenter />}
+          <button 
+            className="sidebar-toggle-btn"
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {isCollapsed ? <FaChevronRight /> : <FaChevronLeft />}
+          </button>
+        </div>
+      </div>
+
+      {/* User Profile Section (Loomio Style) */}
+      {!isCollapsed && (
+        <div className="sidebar-user-section">
+          <div className="sidebar-user-profile">
+            <div className="sidebar-user-avatar">{userInitials}</div>
+            <div className="sidebar-user-info">
+              <p className="sidebar-user-name">{userName}</p>
+              <p className="sidebar-user-role">Member</p>
+              <p className="sidebar-user-points">0 points</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <nav className="sidebar-nav">
         <div className="nav-section">
-          <h4>MENU</h4>
-          
-          <Link to="/dashboard" className={`nav-item ${isActive('/dashboard')}`}>
-            <MdDashboard className="nav-icon" /> Dashboard
-          </Link>
-          
-          <Link to="/teams" className={`nav-item ${isActive('/teams')}`}>
-            <FaUserFriends className="nav-icon" /> My Teams
-          </Link>
-          
-          <Link to="/assigned-tasks" className={`nav-item ${isActive('/assigned-tasks')}`}>
-            <FaTasks className="nav-icon" /> Assigned Tasks
-          </Link>
-          
-          <Link to="/calendar" className={`nav-item ${isActive('/calendar')}`}>
-            <FaCalendarAlt className="nav-icon" /> Calendar
-          </Link>
-          
-          <Link to="/settings" className={`nav-item ${isActive('/settings')}`}>
-            <MdSettings className="nav-icon" /> Settings
-          </Link>
-        </div>
-
-        <div className="nav-section">
-          <h4>TEAMS</h4>
-          <div className="team-item"><span className="dot purple"></span> Engineering</div>
-          <div className="team-item"><span className="dot green"></span> Design Ops</div>
+          {navItems.map((item) => (
+            <Link 
+              key={item.path}
+              to={item.path} 
+              className={`nav-item ${isActive(item.path)}`}
+              title={isCollapsed ? item.label : undefined}
+            >
+              <span className="nav-item-indicator" />
+              <item.icon className="nav-icon" />
+              {!isCollapsed && <span className="nav-label">{item.label}</span>}
+              {isCollapsed && <span className="nav-tooltip">{item.label}</span>}
+            </Link>
+          ))}
         </div>
       </nav>
 
       <div className="sidebar-footer">
         <div className="user-profile">
-          <div className="avatar">{userInitials}</div>
-          <div className="user-info">
-            <p className="user-name">{userName}</p>
-            <button onClick={handleLogout} className="logout-link" style={{ 
-              background: 'none', 
-              border: 'none', 
-              color: 'inherit', 
-              cursor: 'pointer',
-              padding: 0,
-              fontSize: 'inherit',
-              fontFamily: 'inherit',
-              display: 'flex',
-              alignItems: 'center'
-            }}>
-              <FiLogOut style={{ marginRight: '5px' }} /> Logout
+          {isCollapsed && <div className="avatar">{userInitials}</div>}
+          {!isCollapsed && (
+            <button onClick={handleLogout} className="logout-btn" aria-label="Logout">
+              <MdLogout className="logout-icon" />
+              <span>Logout</span>
             </button>
-          </div>
+          )}
+          {isCollapsed && (
+            <button 
+              onClick={handleLogout} 
+              className="logout-btn-collapsed"
+              title="Logout"
+              aria-label="Logout"
+            >
+              <MdLogout />
+            </button>
+          )}
         </div>
       </div>
     </aside>

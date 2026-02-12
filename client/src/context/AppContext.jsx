@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 // client/src/context/AppContext.jsx - FIXED VERSION
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
@@ -19,6 +20,7 @@ export const AppProvider = ({ children }) => {
   const [teams, setTeams] = useState([]);
   const [toasts, setToasts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [joinRequests, setJoinRequests] = useState({});
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
@@ -110,6 +112,75 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  // Join team by code
+  const joinTeamByCode = async (code) => {
+    try {
+      const token = localStorage.getItem('campusToken');
+      const response = await axios.post(`${API_URL}/teams/join-by-code`, { code }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.data.status === 'joined') {
+        await fetchTeams(token);
+        addToast('Joined team successfully!', 'success');
+      } else if (response.data.status === 'pending') {
+        addToast('Join request sent to team leader', 'info');
+      } else if (response.data.status === 'already_member') {
+        addToast('You are already in this team', 'info');
+      }
+      return response.data;
+    } catch (error) {
+      console.error('Join team by code error:', error);
+      addToast(error.response?.data?.error || 'Failed to join team', 'error');
+      throw error;
+    }
+  };
+
+  // Fetch pending join requests for a team (leader only)
+  const fetchJoinRequests = async (teamId) => {
+    try {
+      const token = localStorage.getItem('campusToken');
+      const response = await axios.get(`${API_URL}/teams/${teamId}/join-requests`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setJoinRequests(prev => ({ ...prev, [teamId]: response.data }));
+      return response.data;
+    } catch (error) {
+      console.error('Fetch join requests error:', error);
+      return [];
+    }
+  };
+
+  const approveJoinRequest = async (teamId, requestId) => {
+    try {
+      const token = localStorage.getItem('campusToken');
+      await axios.post(`${API_URL}/teams/${teamId}/join-requests/${requestId}/approve`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      addToast('Request approved', 'success');
+      await fetchJoinRequests(teamId);
+      await fetchTeams(token);
+    } catch (error) {
+      console.error('Approve join request error:', error);
+      addToast('Failed to approve request', 'error');
+      throw error;
+    }
+  };
+
+  const rejectJoinRequest = async (teamId, requestId) => {
+    try {
+      const token = localStorage.getItem('campusToken');
+      await axios.post(`${API_URL}/teams/${teamId}/join-requests/${requestId}/reject`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      addToast('Request rejected', 'info');
+      await fetchJoinRequests(teamId);
+    } catch (error) {
+      console.error('Reject join request error:', error);
+      addToast('Failed to reject request', 'error');
+      throw error;
+    }
+  };
+
   // Fetch tasks
   const fetchTasks = async (token) => {
     try {
@@ -176,6 +247,42 @@ export const AppProvider = ({ children }) => {
     } catch (error) {
       console.error('Error moving task:', error);
       addToast('Failed to update task', 'error');
+    }
+  };
+
+  // Update task
+  const updateTask = async (taskId, taskData) => {
+    try {
+      const token = localStorage.getItem('campusToken');
+      const response = await axios.put(`${API_URL}/tasks/${taskId}`, taskData, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      setTasks(tasks.map(task => 
+        task.id === taskId ? { ...task, ...response.data } : task
+      ));
+      return response.data;
+    } catch (error) {
+      console.error('Error updating task:', error);
+      throw error;
+    }
+  };
+
+  // Refresh single task
+  const refreshTask = async (taskId) => {
+    try {
+      const token = localStorage.getItem('campusToken');
+      const response = await axios.get(`${API_URL}/tasks/${taskId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      setTasks(tasks.map(task => 
+        task.id === taskId ? response.data : task
+      ));
+      return response.data;
+    } catch (error) {
+      console.error('Error refreshing task:', error);
+      throw error;
     }
   };
 
@@ -287,6 +394,8 @@ const updateTeam = async (teamId, teamData) => {
     logout,
     addTask,
     moveTask,
+    updateTask,
+    refreshTask,
     duplicateTask,
     addTeam,
     updateTeam,
@@ -296,7 +405,12 @@ const updateTeam = async (teamId, teamData) => {
     getMyTeams,
     getAllTeamMembers,
     fetchTeams,
-    fetchTasks
+    fetchTasks,
+    joinTeamByCode,
+    fetchJoinRequests,
+    approveJoinRequest,
+    rejectJoinRequest,
+    joinRequests
   };
 
   if (loading) {

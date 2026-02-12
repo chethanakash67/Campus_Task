@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { FaBell, FaCheck, FaTimes, FaCheckDouble } from 'react-icons/fa';
+import { FaBell, FaCheck, FaTimes, FaCheckDouble, FaUsers, FaClipboardList, FaComment, FaClock, FaAt } from 'react-icons/fa';
 import './NotificationCenter.css';
 
 function NotificationCenter() {
@@ -17,7 +17,6 @@ function NotificationCenter() {
     fetchNotifications();
     fetchUnreadCount();
     
-    // Poll for new notifications every 30 seconds
     const interval = setInterval(() => {
       fetchUnreadCount();
     }, 30000);
@@ -96,15 +95,22 @@ function NotificationCenter() {
     }
   };
 
+  // Replace emoji icons with React Icons
   const getNotificationIcon = (type) => {
-    const icons = {
-      'team_invite': '👥',
-      'task_assigned': '📋',
-      'task_comment': '💬',
-      'task_due_soon': '⏰',
-      'mention': '@'
-    };
-    return icons[type] || '🔔';
+    switch (type) {
+      case 'team_invite':
+        return <FaUsers className="notif-type-icon team" />;
+      case 'task_assigned':
+        return <FaClipboardList className="notif-type-icon task" />;
+      case 'task_comment':
+        return <FaComment className="notif-type-icon comment" />;
+      case 'task_due_soon':
+        return <FaClock className="notif-type-icon due" />;
+      case 'mention':
+        return <FaAt className="notif-type-icon mention" />;
+      default:
+        return <FaBell className="notif-type-icon default" />;
+    }
   };
 
   const formatTime = (timestamp) => {
@@ -119,6 +125,21 @@ function NotificationCenter() {
     return date.toLocaleDateString();
   };
 
+  // Helper to ensure message is never undefined
+  const getNotificationMessage = (notif) => {
+    if (!notif.message || notif.message === 'undefined') {
+      return 'You have a new notification';
+    }
+    return notif.message;
+  };
+
+  const getNotificationTitle = (notif) => {
+    if (!notif.title || notif.title === 'undefined') {
+      return 'Notification';
+    }
+    return notif.title;
+  };
+
   return (
     <div className="notification-center" ref={dropdownRef}>
       <button 
@@ -127,6 +148,7 @@ function NotificationCenter() {
           setShowDropdown(!showDropdown);
           if (!showDropdown) fetchNotifications();
         }}
+        aria-label="Notifications"
       >
         <FaBell />
         {unreadCount > 0 && (
@@ -152,8 +174,9 @@ function NotificationCenter() {
           <div className="notification-list">
             {notifications.length === 0 ? (
               <div className="empty-notifications">
-                <FaBell size={40} color="#ccc" />
+                <FaBell size={32} />
                 <p>No notifications yet</p>
+                <span>You're all caught up!</span>
               </div>
             ) : (
               notifications.map(notif => (
@@ -166,8 +189,8 @@ function NotificationCenter() {
                     {getNotificationIcon(notif.type)}
                   </div>
                   <div className="notification-content">
-                    <div className="notification-title">{notif.title}</div>
-                    <div className="notification-message">{notif.message}</div>
+                    <div className="notification-title">{getNotificationTitle(notif)}</div>
+                    <div className="notification-message">{getNotificationMessage(notif)}</div>
                     <div className="notification-time">{formatTime(notif.created_at)}</div>
                   </div>
                   {!notif.is_read && <div className="unread-dot"></div>}

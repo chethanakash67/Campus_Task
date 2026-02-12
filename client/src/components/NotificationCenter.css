@@ -19,6 +19,7 @@
 
 .notification-bell:hover {
   background: rgba(255, 255, 255, 0.1);
+  color: #fff;
 }
 
 .notification-badge {
@@ -33,19 +34,26 @@
   border-radius: 10px;
   min-width: 18px;
   text-align: center;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
 }
 
 .notification-dropdown {
-  position: absolute;
-  top: calc(100% + 10px);
-  right: 0;
+  position: fixed;
+  top: 70px;
+  right: 20px;
   width: 380px;
-  max-height: 500px;
-  background: #1e1e1e;
-  border: 1px solid #333;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-  z-index: 1000;
+  max-width: calc(100vw - 40px);
+  max-height: calc(100vh - 100px);
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  z-index: 9999;
   overflow: hidden;
   animation: slideDown 0.2s ease;
 }
@@ -65,14 +73,16 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 15px 20px;
-  border-bottom: 1px solid #333;
+  padding: 18px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
 }
 
 .notification-header h3 {
   margin: 0;
   font-size: 1.1rem;
-  color: #fff;
+  color: #1f2937;
+  font-weight: 600;
 }
 
 .mark-all-read {
@@ -84,39 +94,106 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  transition: color 0.2s;
+  transition: all 0.2s;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-weight: 500;
 }
 
 .mark-all-read:hover {
-  color: #7d85ff;
+  color: #4f46e5;
+  background: rgba(100, 108, 255, 0.1);
 }
 
 .notification-list {
-  max-height: 400px;
+  max-height: calc(100vh - 200px);
   overflow-y: auto;
+  background: #ffffff;
+}
+
+.notification-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.notification-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.notification-list::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+.notification-list::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
 }
 
 .notification-item {
   display: flex;
   gap: 12px;
-  padding: 15px 20px;
-  border-bottom: 1px solid #2a2a2a;
+  padding: 16px 20px;
+  border-bottom: 1px solid #f3f4f6;
   cursor: pointer;
   transition: background 0.2s;
   position: relative;
 }
 
 .notification-item:hover {
-  background: rgba(100, 108, 255, 0.1);
+  background: #f9fafb;
 }
 
 .notification-item.unread {
-  background: rgba(100, 108, 255, 0.05);
+  background: #eef2ff;
+}
+
+.notification-item.unread::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #646cff;
 }
 
 .notification-icon {
-  font-size: 1.5rem;
   flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(100, 108, 255, 0.1);
+}
+
+.notif-type-icon {
+  font-size: 1rem;
+  color: #646cff;
+}
+
+.notif-type-icon.team {
+  color: #646cff;
+}
+
+.notif-type-icon.task {
+  color: #4ade80;
+}
+
+.notif-type-icon.comment {
+  color: #f59e0b;
+}
+
+.notif-type-icon.due {
+  color: #ef4444;
+}
+
+.notif-type-icon.mention {
+  color: #3b82f6;
+}
+
+.notif-type-icon.default {
+  color: #9ca3af;
 }
 
 .notification-content {
@@ -126,20 +203,25 @@
 
 .notification-title {
   font-weight: 600;
-  color: #fff;
+  color: #1f2937;
   margin-bottom: 4px;
   font-size: 0.95rem;
 }
 
 .notification-message {
-  color: #b0b0b0;
+  color: #6b7280;
   font-size: 0.85rem;
   line-height: 1.4;
   margin-bottom: 4px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .notification-time {
-  color: #808080;
+  color: #9ca3af;
   font-size: 0.75rem;
 }
 
@@ -157,12 +239,27 @@
 .empty-notifications {
   padding: 60px 20px;
   text-align: center;
-  color: #808080;
+  color: #9ca3af;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.empty-notifications svg {
+  color: #d1d5db;
+  opacity: 0.6;
 }
 
 .empty-notifications p {
-  margin-top: 15px;
-  font-size: 0.9rem;
+  margin: 8px 0 0;
+  font-size: 0.95rem;
+  color: #b0b0b0;
+}
+
+.empty-notifications span {
+  font-size: 0.85rem;
+  color: #808080;
 }
 
 .notification-footer {
@@ -178,8 +275,11 @@
   font-size: 0.9rem;
   cursor: pointer;
   font-weight: 500;
+  transition: all 0.2s;
+  padding: 6px 12px;
+  border-radius: 6px;
 }
 
 .notification-footer button:hover {
-  text-decoration: underline;
+  background: rgba(100, 108, 255, 0.1);
 }

@@ -1,12 +1,13 @@
-// client/src/pages/Teams.jsx - ENHANCED WITH TASK CREATION AND CHAT
+// client/src/pages/Teams.jsx - LOOMIO-STYLE UI VERSION
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Toast from '../components/Toast';
-// 1. Added FaComment to imports
-import { FaPlus, FaTimes, FaTrash, FaEdit, FaUsers, FaTasks, FaChartLine, FaComment } from 'react-icons/fa';
+import { FaPlus, FaTimes, FaTrash, FaEdit, FaUsers, FaTasks, FaChartLine, FaComment, FaUserPlus, FaEllipsisH, FaSearch } from 'react-icons/fa';
+import { MdGroup, MdOutlineTaskAlt, MdPending, MdPlayCircle, MdGroups } from 'react-icons/md';
 import { useApp } from '../context/AppContext';
 import './Dashboard.css';
+import './Teams.css';
 
 function Teams() {
   const navigate = useNavigate();
@@ -17,10 +18,16 @@ function Teams() {
     updateTeam, 
     deleteTeam, 
     addTask,
+    addToast,
     toasts, 
     removeToast,
     currentUser,
-    isAuthenticated
+    isAuthenticated,
+    joinTeamByCode,
+    fetchJoinRequests,
+    approveJoinRequest,
+    rejectJoinRequest,
+    joinRequests
   } = useApp();
 
   useEffect(() => {
@@ -28,10 +35,6 @@ function Teams() {
       navigate('/login');
     }
   }, [isAuthenticated, currentUser, navigate]);
-
-  if (!isAuthenticated || !currentUser) {
-    return null;
-  }
   
   const [showModal, setShowModal] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
@@ -43,7 +46,8 @@ function Teams() {
     name: '',
     description: '',
     color: 'purple',
-    members: []
+    members: [],
+    isPublic: true
   });
   
   const [newMember, setNewMember] = useState({
@@ -60,7 +64,22 @@ function Teams() {
     assignees: []
   });
 
+  const [searchQuery, setSearchQuery] = useState('');
   const colors = ['purple', 'green', 'blue', 'red', 'yellow', 'pink'];
+  const location = useLocation();
+
+  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [joinCode, setJoinCode] = useState('');
+  const [joinLoading, setJoinLoading] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const code = params.get('code');
+    if (code) {
+      setJoinCode(code);
+      setShowJoinModal(true);
+    }
+  }, [location.search]);
 
   // Get team statistics
   const getTeamStats = (teamId) => {
@@ -72,6 +91,12 @@ function Teams() {
       pending: teamTasks.filter(t => t.status === 'todo').length
     };
   };
+
+  // Filter teams based on search
+  const filteredTeams = teams.filter(team => 
+    team.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    team.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -138,7 +163,8 @@ function Teams() {
       name: '',
       description: '',
       color: 'purple',
-      members: []
+      members: [],
+      isPublic: true
     });
     setNewMember({ name: '', role: 'Member', email: '' });
   };
@@ -149,7 +175,8 @@ function Teams() {
     name: team.name,
     description: team.description,
     color: team.color,
-    members: team.members || []
+    members: team.members || [],
+    isPublic: team.is_public ?? true
   });
   setShowModal(true);
 };
@@ -226,10 +253,48 @@ function Teams() {
     setExpandedTeam(expandedTeam === teamId ? null : teamId);
   };
 
+  useEffect(() => {
+    if (!expandedTeam) return;
+    const team = teams.find(t => t.id === expandedTeam);
+    if (team?.is_leader) {
+      fetchJoinRequests(expandedTeam);
+    }
+  }, [expandedTeam, teams, fetchJoinRequests]);
+
   // Get tasks for a specific team
   const getTeamTasks = (teamId) => {
     return tasks.filter(t => t.teamId === teamId).slice(0, 5); // Show first 5 tasks
   };
+
+  const handleJoinSubmit = async (e) => {
+    e.preventDefault();
+    if (!joinCode.trim()) {
+      addToast('Team code is required', 'error');
+      return;
+    }
+    try {
+      setJoinLoading(true);
+      await joinTeamByCode(joinCode);
+      setShowJoinModal(false);
+      setJoinCode('');
+    } finally {
+      setJoinLoading(false);
+    }
+  };
+
+  const copyToClipboard = async (text, successMessage) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      addToast(successMessage, 'success');
+    } catch (error) {
+      console.error('Clipboard error:', error);
+      addToast('Failed to copy', 'error');
+    }
+  };
+
+  if (!isAuthenticated || !currentUser) {
+    return null;
+  }
 
   return (
     <div className="dashboard-container">
@@ -237,148 +302,248 @@ function Teams() {
       <Toast toasts={toasts} removeToast={removeToast} />
       
       <main className="main-content">
-        <header className="top-bar">
-          <div className="page-title">
-            <h1>My Teams</h1>
-            <p>Manage your collaborators and projects</p>
+        {/* Page Header Card - Loomio Style */}
+        <div className="page-header-card">
+          <div className="page-header-content">
+            <div className="page-header-icon">
+              <MdGroups />
+            </div>
+            <div className="page-header-text">
+              <h1>Teams</h1>
+              <p>Collaborate with your teammates on shared projects and tasks</p>
+            </div>
           </div>
-          <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-            <FaPlus style={{ marginRight: '8px' }} /> Create Team
-          </button>
-        </header>
+          <div className="page-header-actions">
+            <button className="btn btn-secondary" onClick={() => setShowJoinModal(true)}>
+              <FaUserPlus style={{ marginRight: '8px' }} /> Join Team
+            </button>
+            <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+              <FaPlus style={{ marginRight: '8px' }} /> Create Team
+            </button>
+          </div>
+        </div>
+
+        {/* Search and Filter Section */}
+        <div className="teams-filter-section">
+          <div className="search-input-wrapper">
+            <FaSearch className="search-icon" />
+            <input
+              type="text"
+              placeholder="Search teams..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="search-input"
+            />
+          </div>
+          <div className="teams-count">
+            <span>{filteredTeams.length} {filteredTeams.length === 1 ? 'Team' : 'Teams'}</span>
+          </div>
+        </div>
 
         <div className="content-padding">
-          {teams.length === 0 ? (
-            <div className="empty-state-large">
-              <FaUsers className="empty-icon" />
+          {filteredTeams.length === 0 && searchQuery ? (
+            <div className="empty-state-card">
+              <FaSearch className="empty-icon" />
+              <h3>No teams found</h3>
+              <p>No teams match your search "{searchQuery}"</p>
+              <button className="btn btn-secondary" onClick={() => setSearchQuery('')}>
+                Clear Search
+              </button>
+            </div>
+          ) : filteredTeams.length === 0 ? (
+            <div className="empty-state-card">
+              <MdGroups className="empty-icon" />
               <h3>No teams yet</h3>
-              <p>Create your first team to start collaborating</p>
+              <p>Create your first team to start collaborating with others</p>
               <button className="btn btn-primary" onClick={() => setShowModal(true)}>
                 <FaPlus style={{ marginRight: '8px' }} /> Create Team
               </button>
             </div>
           ) : (
-            <div className="teams-grid">
-              {teams.map(team => {
+            <div className="teams-list">
+              {filteredTeams.map(team => {
                 const stats = getTeamStats(team.id);
                 const teamTasks = getTeamTasks(team.id);
                 const isExpanded = expandedTeam === team.id;
                 
                 return (
-                  <div key={team.id} className={`team-card ${isExpanded ? 'expanded' : ''}`}>
-                    <div className="team-card-header">
-                      <div className="team-meta">
-                        <span className={`dot ${team.color}`}></span>
-                        <span className="member-count">
-                          {team.members.length} {team.members.length === 1 ? 'Member' : 'Members'}
+                  <div key={team.id} className={`team-list-item ${isExpanded ? 'expanded' : ''}`}>
+                    <div className="team-item-main">
+                      <div className="team-item-left">
+                        <div className={`team-avatar ${team.color}`}>
+                          <MdGroups />
+                        </div>
+                        <div className="team-item-info">
+                          <h3 className="team-item-name">{team.name}</h3>
+                          <p className="team-item-desc">{team.description || 'No description'}</p>
+                          <div className="team-item-meta">
+                            <span className="meta-item">
+                              <FaUsers /> {team.members.length} {team.members.length === 1 ? 'member' : 'members'}
+                            </span>
+                            <span className="meta-item">
+                              <FaTasks /> {stats.total} tasks
+                            </span>
+                            <span className="meta-item completed">
+                              <MdOutlineTaskAlt /> {stats.completed} completed
+                            </span>
+                            <span className={`meta-item visibility ${team.is_public ? 'public' : 'private'}`}>
+                              {team.is_public ? 'Public' : 'Private'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="team-item-right">
+                        <div className="team-members-avatars">
+                          {team.members.slice(0, 4).map((member, idx) => (
+                            <div 
+                              key={member.id} 
+                              className="member-avatar-small"
+                              style={{ zIndex: 10 - idx }}
+                              title={member.name}
+                            >
+                              {member.id}
+                            </div>
+                          ))}
+                          {team.members.length > 4 && (
+                            <div className="member-avatar-small more">
+                              +{team.members.length - 4}
+                            </div>
+                          )}
+                        </div>
+                        <div className="team-item-actions">
+                          <button 
+                            className="btn btn-icon" 
+                            onClick={() => navigate(`/teams/${team.id}/chat`)}
+                            title="Team Chat"
+                          >
+                            <FaComment />
+                          </button>
+                          <button 
+                            className="btn btn-icon" 
+                            onClick={() => handleCreateTaskForTeam(team)}
+                            title="Create task"
+                          >
+                            <FaTasks />
+                          </button>
+                          <button 
+                            className="btn btn-icon" 
+                            onClick={() => handleEdit(team)}
+                            title="Edit team"
+                          >
+                            <FaEdit />
+                          </button>
+                          <button 
+                            className="btn btn-icon delete" 
+                            onClick={() => handleDelete(team.id)}
+                            title="Delete team"
+                          >
+                            <FaTrash />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    {stats.total > 0 && (
+                      <div className="team-progress-section">
+                        <div className="progress-bar-container">
+                          <div 
+                            className="progress-bar-fill"
+                            style={{ width: `${(stats.completed / stats.total) * 100}%` }}
+                          ></div>
+                        </div>
+                        <span className="progress-text">
+                          {Math.round((stats.completed / stats.total) * 100)}% complete
                         </span>
                       </div>
-                      <div className="team-actions">
-                        {/* 2. Added Team Chat Button */}
-                        <button 
-                          className="icon-btn" 
-                          onClick={() => navigate(`/teams/${team.id}/chat`)}
-                          title="Team Chat"
-                        >
-                          <FaComment />
-                        </button>
-                        
-                        <button 
-                          className="icon-btn" 
-                          onClick={() => handleCreateTaskForTeam(team)}
-                          title="Create task for team"
-                        >
-                          <FaTasks />
-                        </button>
-                        <button 
-                          className="icon-btn" 
-                          onClick={() => handleEdit(team)}
-                          title="Edit team"
-                        >
-                          <FaEdit />
-                        </button>
-                        <button 
-                          className="icon-btn delete" 
-                          onClick={() => handleDelete(team.id)}
-                          title="Delete team"
-                        >
-                          <FaTrash />
-                        </button>
-                      </div>
-                    </div>
-                    
-                    <h2>{team.name}</h2>
-                    <p className="team-desc">{team.description}</p>
+                    )}
 
-                    {/* Team Statistics */}
-                    <div className="team-stats">
-                      <div className="team-stat">
-                        <div className="stat-value">{stats.total}</div>
-                        <div className="stat-label">Total</div>
-                      </div>
-                      <div className="team-stat">
-                        <div className="stat-value stat-pending">{stats.pending}</div>
-                        <div className="stat-label">Pending</div>
-                      </div>
-                      <div className="team-stat">
-                        <div className="stat-value stat-progress">{stats.inProgress}</div>
-                        <div className="stat-label">Active</div>
-                      </div>
-                      <div className="team-stat">
-                        <div className="stat-value stat-done">{stats.completed}</div>
-                        <div className="stat-label">Done</div>
-                      </div>
-                    </div>
-
-                    {/* Team Members */}
-                    <div className="team-members">
-                      <div className="members-label">Team Members</div>
-                      <div className="members-list">
-                        {team.members.slice(0, 3).map(member => (
-                          <div key={member.id} className="member-item">
-                            <div className="mini-avatar">{member.id}</div>
-                            <div className="member-info">
-                              <div className="member-name">{member.name}</div>
-                              <div className="member-role">{member.role}</div>
-                            </div>
-                          </div>
-                        ))}
-                        {team.members.length > 3 && (
-                          <div className="member-item more-members">
-                            +{team.members.length - 3} more members
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Recent Tasks Preview */}
+                    {/* Expandable Tasks Preview */}
                     {teamTasks.length > 0 && (
-                      <div className="team-tasks-preview">
+                      <div className="team-tasks-section">
                         <button 
-                          className="preview-toggle"
+                          className="tasks-toggle-btn"
                           onClick={() => toggleExpandTeam(team.id)}
                         >
-                          <FaChartLine /> Recent Tasks ({teamTasks.length})
-                          <span className="toggle-icon">{isExpanded ? '▲' : '▼'}</span>
+                          <span>Recent Tasks ({teamTasks.length})</span>
+                          <span className="toggle-arrow">{isExpanded ? '▲' : '▼'}</span>
                         </button>
                         
                         {isExpanded && (
-                          <div className="tasks-preview-list">
+                          <div className="tasks-list-compact">
                             {teamTasks.map(task => (
-                              <div key={task.id} className="preview-task-item">
-                                <span className={`priority-indicator ${task.priority.toLowerCase()}`}></span>
-                                <div className="preview-task-info">
-                                  <div className="preview-task-title">{task.title}</div>
-                                  <div className="preview-task-meta">
-                                    <span className={`status-mini ${task.status}`}>
-                                      {task.status.replace('-', ' ')}
-                                    </span>
-                                    {task.dueDate && (
-                                      <span className="due-mini">
-                                        Due: {new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                      </span>
-                                    )}
-                                  </div>
+                              <div key={task.id} className="task-list-item-compact">
+                                <span className={`priority-dot ${task.priority.toLowerCase()}`}></span>
+                                <span className="task-title-compact">{task.title}</span>
+                                <span className={`status-badge ${task.status}`}>
+                                  {task.status.replace('-', ' ')}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Leader-only Team Code + Join Link */}
+                    {team.is_leader && team.team_code && (
+                      <div className="team-code-section">
+                        <div className="team-code-info">
+                          <span className="team-code-label">Team Code</span>
+                          <span className="team-code-value">{team.team_code}</span>
+                        </div>
+                        <div className="team-code-actions">
+                          <button
+                            className="btn btn-secondary btn-small"
+                            onClick={() => copyToClipboard(team.team_code, 'Team code copied')}
+                          >
+                            Copy Code
+                          </button>
+                          <button
+                            className="btn btn-secondary btn-small"
+                            onClick={() => copyToClipboard(
+                              `${window.location.origin}/teams?code=${team.team_code}`,
+                              'Join link copied'
+                            )}
+                          >
+                            Copy Join Link
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Join Requests (Leader Only) */}
+                    {team.is_leader && isExpanded && (
+                      <div className="team-join-requests">
+                        <div className="join-requests-header">
+                          <span>Join Requests</span>
+                          <span className="join-requests-count">
+                            {(joinRequests[team.id] || []).length}
+                          </span>
+                        </div>
+                        {(joinRequests[team.id] || []).length === 0 ? (
+                          <div className="join-requests-empty">No pending requests</div>
+                        ) : (
+                          <div className="join-requests-list">
+                            {(joinRequests[team.id] || []).map(req => (
+                              <div key={req.id} className="join-request-item">
+                                <div className="join-request-info">
+                                  <div className="join-request-name">{req.name}</div>
+                                  <div className="join-request-email">{req.email}</div>
+                                </div>
+                                <div className="join-request-actions">
+                                  <button
+                                    className="btn btn-secondary btn-small"
+                                    onClick={() => approveJoinRequest(team.id, req.id)}
+                                  >
+                                    Accept
+                                  </button>
+                                  <button
+                                    className="btn btn-secondary btn-small"
+                                    onClick={() => rejectJoinRequest(team.id, req.id)}
+                                  >
+                                    Decline
+                                  </button>
                                 </div>
                               </div>
                             ))}
@@ -439,6 +604,31 @@ function Teams() {
                       />
                     ))}
                   </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Team Visibility</label>
+                  <div className="visibility-toggle">
+                    <button
+                      type="button"
+                      className={`visibility-option ${newTeam.isPublic ? 'active' : ''}`}
+                      onClick={() => setNewTeam({ ...newTeam, isPublic: true })}
+                    >
+                      Public
+                    </button>
+                    <button
+                      type="button"
+                      className={`visibility-option ${!newTeam.isPublic ? 'active' : ''}`}
+                      onClick={() => setNewTeam({ ...newTeam, isPublic: false })}
+                    >
+                      Private
+                    </button>
+                  </div>
+                  <p className="visibility-help">
+                    {newTeam.isPublic
+                      ? 'Anyone with the team code can join instantly.'
+                      : 'Join requests require approval by the team lead.'}
+                  </p>
                 </div>
 
                 <div className="form-group">
@@ -577,6 +767,34 @@ function Teams() {
                 </div>
 
                 <button type="submit" className="btn btn-full">Create Task</button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Join Team Modal */}
+        {showJoinModal && (
+          <div className="modal-overlay">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h2>Join a Team</h2>
+                <button className="close-btn" onClick={() => setShowJoinModal(false)}>
+                  <FaTimes />
+                </button>
+              </div>
+              <form onSubmit={handleJoinSubmit}>
+                <div className="form-group">
+                  <label>Team Code</label>
+                  <input
+                    type="text"
+                    placeholder="Enter team code"
+                    value={joinCode}
+                    onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                  />
+                </div>
+                <button type="submit" className="btn btn-full" disabled={joinLoading}>
+                  {joinLoading ? 'Joining...' : 'Join Team'}
+                </button>
               </form>
             </div>
           </div>

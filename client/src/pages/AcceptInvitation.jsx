@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
-import './Login.css';
+import { FaUsers, FaClipboardList, FaCheckCircle, FaTimesCircle, FaExclamationCircle, FaInfoCircle } from 'react-icons/fa';
+import '../styles/auth.css';
 
 function AcceptInvitation() {
     const [searchParams] = useSearchParams();
@@ -30,7 +31,7 @@ function AcceptInvitation() {
                     navigate('/login?from=invitation', { replace: true });
                     return;
                 }
-            } catch (err) {
+            } catch {
                 setError('Invalid or expired invitation link');
             } finally {
                 setLoading(false);
@@ -67,9 +68,9 @@ function AcceptInvitation() {
         
         // Check if user was already a member
         if (response.data.alreadyMember) {
-            alert('ℹ️ ' + response.data.message);
+            alert(response.data.message);
         } else {
-            alert('✅ ' + response.data.message);
+            alert(response.data.message);
         }
         
         // Clear pending invitation if it exists
@@ -130,7 +131,10 @@ function AcceptInvitation() {
         return (
             <div className="auth-container">
                 <div className="auth-box">
-                    <h2>❌ Error</h2>
+                    <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+                        <FaExclamationCircle size={32} color="#ef4444" />
+                    </div>
+                    <h2>Error</h2>
                     <p>{error}</p>
                     <button className="btn btn-full" onClick={() => navigate('/')}>
                         Go to Home
@@ -160,11 +164,11 @@ function AcceptInvitation() {
                             
                             <div className="invitation-stats">
                                 <div className="stat-item">
-                                    <span className="stat-icon">👥</span>
+                                    <span className="stat-icon"><FaUsers /></span>
                                     <span>{invitation.member_count || 0} members</span>
                                 </div>
                                 <div className="stat-item">
-                                    <span className="stat-icon">📋</span>
+                                    <span className="stat-icon"><FaClipboardList /></span>
                                     <span>{invitation.task_count || 0} active tasks</span>
                                 </div>
                             </div>
@@ -175,7 +179,8 @@ function AcceptInvitation() {
                             onClick={handleAccept}
                             disabled={accepting}
                         >
-                            {accepting ? 'Accepting...' : '✅ Accept Invitation'}
+                            <FaCheckCircle style={{ marginRight: '8px' }} />
+                            {accepting ? 'Accepting...' : 'Accept Invitation'}
                         </button>
                         
                         <button 
@@ -183,7 +188,8 @@ function AcceptInvitation() {
                             style={{ marginTop: '10px', width: '100%' }}
                             onClick={handleDecline}
                         >
-                            ❌ Decline
+                            <FaTimesCircle style={{ marginRight: '8px' }} />
+                            Decline
                         </button>
                     </>
                 )}

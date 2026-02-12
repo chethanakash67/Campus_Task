@@ -1,0 +1,485 @@
+/* Settings.css - Loomio-Style Settings Page */
+
+/* Settings Layout */
+.settings-layout {
+  display: flex;
+  gap: 24px;
+  padding: 0 24px 24px;
+  max-width: 1200px;
+}
+
+/* Settings Sidebar */
+.settings-sidebar {
+  width: 240px;
+  flex-shrink: 0;
+}
+
+.settings-nav {
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  overflow: hidden;
+  position: sticky;
+  top: 24px;
+}
+
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 20px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.settings-nav-item:last-child {
+  border-bottom: none;
+}
+
+.settings-nav-item:hover {
+  background: #f9fafb;
+  color: #111827;
+}
+
+.settings-nav-item.active {
+  background: #eff6ff;
+  color: #0ea5e9;
+  border-left: 3px solid #0ea5e9;
+}
+
+.settings-nav-item svg {
+  font-size: 18px;
+}
+
+/* Settings Content */
+.settings-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.settings-panel-header {
+  margin-bottom: 8px;
+}
+
+.settings-panel-header h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 4px 0;
+}
+
+.settings-panel-header p {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0;
+}
+
+/* Profile Card */
+.profile-card {
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  overflow: hidden;
+}
+
+.profile-card-header {
+  display: flex;
+  gap: 24px;
+  padding: 24px;
+  background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+}
+
+.profile-avatar-section {
+  flex-shrink: 0;
+}
+
+.profile-avatar-large {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+  color: white;
+  font-size: 32px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  border: 4px solid #ffffff;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.2);
+}
+
+.avatar-edit-btn {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #e5e7eb;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.avatar-edit-btn:hover {
+  background: #0ea5e9;
+  border-color: #0ea5e9;
+  color: white;
+}
+
+.profile-info-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.profile-info-section h3 {
+  font-size: 22px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 4px 0;
+}
+
+.profile-info-section > p {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0 0 16px 0;
+}
+
+.profile-stats {
+  display: flex;
+  gap: 32px;
+}
+
+.profile-stat {
+  display: flex;
+  flex-direction: column;
+}
+
+.profile-stat .stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.profile-stat .stat-label {
+  font-size: 12px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Settings Form Card */
+.settings-form-card {
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  padding: 24px;
+}
+
+.settings-form-card h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 4px 0;
+}
+
+.settings-form-card > p {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0 0 20px 0;
+}
+
+.card-header-with-icon {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.card-icon {
+  width: 40px;
+  height: 40px;
+  background: #eff6ff;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #0ea5e9;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.card-header-with-icon h3 {
+  margin: 0 0 4px 0;
+}
+
+.card-header-with-icon p {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0;
+}
+
+/* Form Grid */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.form-group.full-width {
+  grid-column: 1 / -1;
+}
+
+.form-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.form-group input,
+.form-group textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #111827;
+  background: #ffffff;
+  transition: all 0.2s ease;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #0ea5e9;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+}
+
+.form-group input:disabled {
+  background: #f9fafb;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.form-hint {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-top: 4px;
+  display: block;
+}
+
+.form-actions {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #f3f4f6;
+}
+
+/* Notification Options */
+.notification-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.notification-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-radius: 8px;
+  transition: background 0.2s ease;
+}
+
+.notification-option:hover {
+  background: #f9fafb;
+}
+
+.option-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.option-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #111827;
+}
+
+.option-desc {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* Toggle Switch */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #e5e7eb;
+  transition: 0.3s;
+  border-radius: 24px;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background-color: #0ea5e9;
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+  transform: translateX(20px);
+}
+
+/* Danger Zone */
+.danger-zone {
+  border-color: #fee2e2;
+  background: #fef2f2;
+}
+
+.danger-zone h3 {
+  color: #dc2626;
+}
+
+.danger-actions {
+  margin-top: 16px;
+}
+
+.btn.btn-outline-danger {
+  background: transparent;
+  color: #dc2626;
+  border: 1px solid #dc2626;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn.btn-outline-danger:hover {
+  background: #dc2626;
+  color: white;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .settings-layout {
+    flex-direction: column;
+    padding: 0 16px 16px;
+  }
+  
+  .settings-sidebar {
+    width: 100%;
+  }
+  
+  .settings-nav {
+    display: flex;
+    overflow-x: auto;
+    position: static;
+  }
+  
+  .settings-nav-item {
+    flex: 1;
+    justify-content: center;
+    border-bottom: none;
+    border-right: 1px solid #f3f4f6;
+    padding: 12px 16px;
+    white-space: nowrap;
+  }
+  
+  .settings-nav-item:last-child {
+    border-right: none;
+  }
+  
+  .settings-nav-item.active {
+    border-left: none;
+    border-bottom: 3px solid #0ea5e9;
+  }
+}
+
+@media (max-width: 640px) {
+  .profile-card-header {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  
+  .profile-stats {
+    justify-content: center;
+  }
+  
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .form-group.full-width {
+    grid-column: auto;
+  }
+  
+  .notification-option {
+    padding: 12px;
+  }
+  
+  .card-header-with-icon {
+    flex-direction: column;
+    text-align: center;
+  }
+}

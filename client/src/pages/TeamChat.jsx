@@ -5,8 +5,9 @@ import Sidebar from '../components/Sidebar';
 import Toast from '../components/Toast';
 import axios from 'axios';
 import { 
-  FaPaperPlane, FaArrowLeft, FaUsers, FaImage, FaFile, 
-  FaSmile, FaEllipsisV, FaReply, FaTrash, FaEdit, FaDownload 
+  FaPaperPlane, FaArrowLeft, FaUsers, FaFile, 
+  FaSmile, FaEllipsisV, FaReply, FaTrash, FaEdit, FaDownload, FaPhone, FaVideo, FaBookmark, FaSearch,
+  FaComments
 } from 'react-icons/fa';
 import { useApp } from '../context/AppContext';
 import './Dashboard.css';
@@ -21,18 +22,22 @@ function TeamChat() {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [typing, setTyping] = useState([]);
+  const [typing] = useState([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [replyingTo, setReplyingTo] = useState(null);
   const [editingMessage, setEditingMessage] = useState(null);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [team, setTeam] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [bookmarkedMessageIds, setBookmarkedMessageIds] = useState([]);
   
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
+  const messageRefs = useRef({});
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
   
+  // Emojis kept for chat reactions - this is intentional functionality
   const emojis = ['😀', '😂', '❤️', '👍', '🎉', '🔥', '💯', '✅', '🚀', '👏', '😍', '🤔'];
 
   useEffect(() => {
@@ -52,6 +57,19 @@ function TeamChat() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    const storageKey = `chatBookmarks_${teamId}`;
+    const saved = localStorage.getItem(storageKey);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) setBookmarkedMessageIds(parsed);
+      } catch (error) {
+        console.error('Failed to parse saved bookmarks:', error);
+      }
+    }
+  }, [teamId]);
 
   // Simulated typing indicator
   useEffect(() => {
@@ -163,22 +181,98 @@ function TeamChat() {
   const addReaction = async (messageId, emoji) => {
     try {
       const token = localStorage.getItem('campusToken');
-      await axios.post(`${API_URL}/chat/team/${teamId}/react`, 
+      const response = await axios.post(`${API_URL}/chat/team/${teamId}/react`, 
         { messageId, emoji },
         { headers: { Authorization: `Bearer ${token}` }}
       );
       
       // Update locally
-      setMessages(messages.map(msg => {
+      setMessages(prev => prev.map(msg => {
         if (msg.id === messageId) {
-          const reactions = { ...msg.reactions };
-          reactions[emoji] = (reactions[emoji] || 0) + 1;
-          return { ...msg, reactions };
+          return { ...msg, reactions: response.data.reactions || {} };
         }
         return msg;
       }));
     } catch (error) {
       console.error('Error adding reaction:', error);
+    }
+  };
+
+  const toggleBookmark = (messageId) => {
+    setBookmarkedMessageIds(prev => {
+      const next = prev.includes(messageId)
+        ? prev.filter(id => id !== messageId)
+        : [...prev, messageId];
+      localStorage.setItem(`chatBookmarks_${teamId}`, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const jumpToMessage = (messageId) => {
+    const target = messageRefs.current[messageId];
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      target.classList.add('message-highlight');
+      setTimeout(() => target.classList.remove('message-highlight'), 1200);
+    }
+  };
+
+  const handleExportTranscript = () => {
+    try {
+      const lines = messages.map(msg => {
+        const ts = new Date(msg.created_at).toLocaleString();
+        return `[${ts}] ${msg.user_name}: ${msg.message}`;
+      });
+      const content = `Team: ${team?.name || 'Team Chat'}\n\n${lines.join('\n')}`;
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${team?.name || 'team'}-chat-transcript.txt`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      addToast('Chat transcript exported', 'success');
+    } catch (error) {
+      console.error('Export failed:', error);
+      addToast('Failed to export transcript', 'error');
+    }
+  };
+
+  const postSystemLinkMessage = async (label, url) => {
+    const token = localStorage.getItem('campusToken');
+    await axios.post(
+      `${API_URL}/chat/team/${teamId}`,
+      { message: `${label}\n${url}` },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    await fetchMessages();
+  };
+
+  const handleStartMeet = async () => {
+    try {
+      const room = `campustasks-${teamId}-${Date.now()}`;
+      const meetUrl = `https://meet.jit.si/${room}`;
+      window.open(meetUrl, '_blank', 'noopener,noreferrer');
+      await postSystemLinkMessage(`🎥 ${currentUser?.name || 'A teammate'} started a video meeting:`, meetUrl);
+      addToast('Meet link shared in chat', 'success');
+    } catch (error) {
+      console.error('Error starting meeting:', error);
+      addToast('Failed to create meet link', 'error');
+    }
+  };
+
+  const handleStartCall = async () => {
+    try {
+      const room = `campustasks-audio-${teamId}-${Date.now()}`;
+      const callUrl = `https://meet.jit.si/${room}#config.startWithVideoMuted=true&config.startAudioOnly=true`;
+      window.open(callUrl, '_blank', 'noopener,noreferrer');
+      await postSystemLinkMessage(`📞 ${currentUser?.name || 'A teammate'} started an audio call:`, callUrl);
+      addToast('Call link shared in chat', 'success');
+    } catch (error) {
+      console.error('Error starting call:', error);
+      addToast('Failed to create call link', 'error');
     }
   };
 
@@ -247,7 +341,11 @@ function TeamChat() {
     const replyToMsg = msg.replyTo ? messages.find(m => m.id === msg.replyTo) : null;
 
     return (
-      <div key={msg.id} className={`chat-message ${isCurrentUser ? 'own-message' : ''}`}>
+      <div
+        key={msg.id}
+        className={`chat-message ${isCurrentUser ? 'own-message' : ''}`}
+        ref={(el) => { messageRefs.current[msg.id] = el; }}
+      >
         {!isCurrentUser && showAvatar && (
           <div className="message-avatar">
             {msg.avatar || msg.user_name?.substring(0, 2).toUpperCase()}
@@ -303,6 +401,11 @@ function TeamChat() {
 
           <div className="message-meta">
             <span className="message-time">{formatTime(msg.created_at)}</span>
+            <FaBookmark
+              onClick={() => toggleBookmark(msg.id)}
+              title={bookmarkedMessageIds.includes(msg.id) ? 'Remove bookmark' : 'Bookmark message'}
+              className={bookmarkedMessageIds.includes(msg.id) ? 'bookmark-icon active' : 'bookmark-icon'}
+            />
             
             {isCurrentUser && (
               <div className="message-actions">
@@ -343,6 +446,17 @@ function TeamChat() {
       </div>
     );
   }
+
+  const filteredMessages = messages.filter((msg) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      msg.message?.toLowerCase().includes(q) ||
+      msg.user_name?.toLowerCase().includes(q)
+    );
+  });
+
+  const bookmarkedMessages = messages.filter(msg => bookmarkedMessageIds.includes(msg.id));
 
   return (
     <div className="dashboard-container">
@@ -391,26 +505,62 @@ function TeamChat() {
               <li>Share files up to 10MB</li>
             </ul>
           </div>
+
+          {bookmarkedMessages.length > 0 && (
+            <div className="bookmarks-panel">
+              <div className="tip-header">📌 Bookmarks ({bookmarkedMessages.length})</div>
+              {bookmarkedMessages.slice(-5).reverse().map((msg) => (
+                <button
+                  key={msg.id}
+                  className="bookmark-jump-btn"
+                  onClick={() => jumpToMessage(msg.id)}
+                >
+                  <span>{msg.user_name}:</span> {msg.message?.slice(0, 28) || ''}{msg.message?.length > 28 ? '...' : ''}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Main Chat Area */}
         <div className="chat-main">
           <div className="chat-header">
             <div>
-              <h1>💬 {team?.name || 'Team'} Chat</h1>
+              <h1><FaComments style={{ marginRight: '10px', verticalAlign: 'middle' }} />{team?.name || 'Team'} Chat</h1>
               <p>{onlineUsers.filter(u => u.status === 'online').length} online</p>
             </div>
-            <FaEllipsisV style={{ cursor: 'pointer' }} />
+            <div className="chat-header-actions">
+              <div className="chat-search-wrap">
+                <FaSearch />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search messages"
+                  className="chat-search-input"
+                />
+              </div>
+              <button className="header-action-btn" onClick={handleExportTranscript} title="Export chat transcript">
+                <FaDownload /> Export
+              </button>
+              <button className="header-action-btn" onClick={handleStartCall} title="Start Audio Call">
+                <FaPhone /> Call
+              </button>
+              <button className="header-action-btn meet" onClick={handleStartMeet} title="Start Video Meeting">
+                <FaVideo /> Meet
+              </button>
+              <FaEllipsisV style={{ cursor: 'pointer' }} />
+            </div>
           </div>
 
           <div className="messages-container">
-            {messages.length === 0 ? (
+            {filteredMessages.length === 0 ? (
               <div className="empty-chat">
-                <FaUsers size={50} color="#ccc" />
-                <p>No messages yet. Start the conversation!</p>
+                <FaUsers size={50} color="#555" />
+                <p>{searchQuery ? 'No messages match your search' : 'No messages yet. Start the conversation!'}</p>
               </div>
             ) : (
-              messages.map((msg, idx) => renderMessage(msg, idx))
+              filteredMessages.map((msg, idx) => renderMessage(msg, idx))
             )}
             
             {typing.length > 0 && (
