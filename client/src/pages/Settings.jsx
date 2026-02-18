@@ -1,6 +1,6 @@
 // client/src/pages/Settings.jsx - LOOMIO-STYLE UI
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import { useApp } from '../context/AppContext';
 import { FaUser, FaBell, FaShieldAlt, FaPalette, FaCheck, FaCamera } from 'react-icons/fa';
@@ -10,8 +10,16 @@ import './Settings.css';
 
 function Settings() {
   const navigate = useNavigate();
-  const { currentUser, isAuthenticated, tasks } = useApp();
+  const location = useLocation();
+  const { currentUser, isAuthenticated, tasks, updateCurrentUserProfile } = useApp();
   const [activeTab, setActiveTab] = useState('profile');
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    name: '',
+    bio: '',
+    avatar: ''
+  });
+  const fileInputRef = useRef(null);
   const [notifications, setNotifications] = useState({
     emailTaskAssigned: true,
     emailTaskComplete: true,
@@ -28,26 +36,82 @@ function Settings() {
     }
   }, [isAuthenticated, currentUser, navigate]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get('tab');
+    if (tab && ['profile', 'notifications', 'security'].includes(tab)) {
+      setActiveTab(tab);
+    } else if (location.pathname === '/notifications') {
+      setActiveTab('notifications');
+    }
+  }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    setProfileForm({
+      name: currentUser.name || '',
+      bio: currentUser.bio || '',
+      avatar: currentUser.avatar || ''
+    });
+  }, [currentUser]);
+
   if (!isAuthenticated || !currentUser) {
     return null;
   }
 
-  const userInitials = currentUser?.avatar || currentUser?.name?.substring(0, 2).toUpperCase() || 'JD';
+  const displayedAvatar = profileForm.avatar ?? currentUser?.avatar;
+  const isImageAvatar = typeof displayedAvatar === 'string' &&
+    (displayedAvatar.startsWith('data:image/') ||
+      displayedAvatar.startsWith('http://') ||
+      displayedAvatar.startsWith('https://'));
+  const userInitials = currentUser?.name?.substring(0, 2).toUpperCase() || 'JD';
   const userName = currentUser?.name || 'John Doe';
   const userEmail = currentUser?.email || 'user@example.com';
-  
+
   // Calculate user stats
-  const userTasks = tasks.filter(t => 
+  const userTasks = tasks.filter(t =>
     t.assignees?.some(a => a.email === currentUser?.email)
   );
   const completedTasks = userTasks.filter(t => t.status === 'done').length;
-  const points = completedTasks * 10;
+  const points = currentUser?.points || 0;
 
   const handleNotificationChange = (key) => {
     setNotifications(prev => ({
       ...prev,
       [key]: !prev[key]
     }));
+  };
+
+  const handleProfileInput = (e) => {
+    const { name, value } = e.target;
+    setProfileForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleProfileAvatarUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setProfileForm(prev => ({ ...prev, avatar: reader.result }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeProfileAvatar = () => {
+    setProfileForm(prev => ({ ...prev, avatar: null }));
+  };
+
+  const submitProfile = async () => {
+    try {
+      setSavingProfile(true);
+      await updateCurrentUserProfile({
+        name: profileForm.name,
+        bio: profileForm.bio,
+        avatar: profileForm.avatar
+      });
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   const tabs = [
@@ -106,11 +170,27 @@ function Settings() {
                   <div className="profile-card-header">
                     <div className="profile-avatar-section">
                       <div className="profile-avatar-large">
-                        {userInitials}
-                        <button className="avatar-edit-btn" title="Change avatar">
-                          <FaCamera />
-                        </button>
+                        {isImageAvatar ? (
+                          <img src={displayedAvatar} alt={userName} className="avatar-image" />
+                        ) : (
+                          userInitials
+                        )}
                       </div>
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleProfileAvatarUpload}
+                        style={{ display: 'none' }}
+                        accept="image/*"
+                      />
+                      <button type="button" className="avatar-change-text-btn" onClick={() => fileInputRef.current?.click()}>
+                        <FaCamera /> Change
+                      </button>
+                      {isImageAvatar && (
+                        <button type="button" className="avatar-change-text-btn" onClick={removeProfileAvatar}>
+                          Remove
+                        </button>
+                      )}
                     </div>
                     <div className="profile-info-section">
                       <h3>{userName}</h3>
@@ -139,7 +219,12 @@ function Settings() {
                   <div className="form-grid">
                     <div className="form-group">
                       <label>Display Name</label>
-                      <input type="text" defaultValue={userName} />
+                      <input
+                        type="text"
+                        name="name"
+                        value={profileForm.name}
+                        onChange={handleProfileInput}
+                      />
                     </div>
                     <div className="form-group">
                       <label>Email Address</label>
@@ -148,16 +233,19 @@ function Settings() {
                     </div>
                     <div className="form-group full-width">
                       <label>Bio</label>
-                      <textarea 
+                      <textarea
+                        name="bio"
                         placeholder="Tell us about yourself..."
                         rows={3}
+                        value={profileForm.bio}
+                        onChange={handleProfileInput}
                       ></textarea>
                     </div>
                   </div>
                   <div className="form-actions">
-                    <button className="btn btn-primary">
+                    <button type="button" className="btn btn-primary" onClick={submitProfile} disabled={savingProfile}>
                       <FaCheck style={{ marginRight: '8px' }} />
-                      Save Changes
+                      {savingProfile ? 'Saving...' : 'Save Changes'}
                     </button>
                   </div>
                 </div>
@@ -181,7 +269,7 @@ function Settings() {
                       <p>Manage email notification preferences</p>
                     </div>
                   </div>
-                  
+
                   <div className="notification-options">
                     <div className="notification-option">
                       <div className="option-info">
@@ -189,8 +277,8 @@ function Settings() {
                         <span className="option-desc">Get notified when you're assigned to a task</span>
                       </div>
                       <label className="toggle-switch">
-                        <input 
-                          type="checkbox" 
+                        <input
+                          type="checkbox"
                           checked={notifications.emailTaskAssigned}
                           onChange={() => handleNotificationChange('emailTaskAssigned')}
                         />
@@ -204,8 +292,8 @@ function Settings() {
                         <span className="option-desc">Get notified when tasks are completed</span>
                       </div>
                       <label className="toggle-switch">
-                        <input 
-                          type="checkbox" 
+                        <input
+                          type="checkbox"
                           checked={notifications.emailTaskComplete}
                           onChange={() => handleNotificationChange('emailTaskComplete')}
                         />
@@ -219,8 +307,8 @@ function Settings() {
                         <span className="option-desc">Get notified when you're invited to a team</span>
                       </div>
                       <label className="toggle-switch">
-                        <input 
-                          type="checkbox" 
+                        <input
+                          type="checkbox"
                           checked={notifications.emailTeamInvite}
                           onChange={() => handleNotificationChange('emailTeamInvite')}
                         />
@@ -234,8 +322,8 @@ function Settings() {
                         <span className="option-desc">Receive reminders before task deadlines</span>
                       </div>
                       <label className="toggle-switch">
-                        <input 
-                          type="checkbox" 
+                        <input
+                          type="checkbox"
                           checked={notifications.emailReminders}
                           onChange={() => handleNotificationChange('emailReminders')}
                         />
@@ -254,7 +342,7 @@ function Settings() {
                       <p>Control in-app notification preferences</p>
                     </div>
                   </div>
-                  
+
                   <div className="notification-options">
                     <div className="notification-option">
                       <div className="option-info">
@@ -262,8 +350,8 @@ function Settings() {
                         <span className="option-desc">Show notification for new task assignments</span>
                       </div>
                       <label className="toggle-switch">
-                        <input 
-                          type="checkbox" 
+                        <input
+                          type="checkbox"
                           checked={notifications.pushNewTask}
                           onChange={() => handleNotificationChange('pushNewTask')}
                         />
@@ -277,8 +365,8 @@ function Settings() {
                         <span className="option-desc">Get notified when someone comments or mentions you</span>
                       </div>
                       <label className="toggle-switch">
-                        <input 
-                          type="checkbox" 
+                        <input
+                          type="checkbox"
                           checked={notifications.pushComments}
                           onChange={() => handleNotificationChange('pushComments')}
                         />
@@ -292,8 +380,8 @@ function Settings() {
                         <span className="option-desc">Show reminders for approaching deadlines</span>
                       </div>
                       <label className="toggle-switch">
-                        <input 
-                          type="checkbox" 
+                        <input
+                          type="checkbox"
                           checked={notifications.pushDeadlines}
                           onChange={() => handleNotificationChange('pushDeadlines')}
                         />
@@ -322,7 +410,7 @@ function Settings() {
                       <p>Update your account password</p>
                     </div>
                   </div>
-                  
+
                   <div className="form-grid">
                     <div className="form-group full-width">
                       <label>Current Password</label>

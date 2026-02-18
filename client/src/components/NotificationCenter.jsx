@@ -202,7 +202,7 @@ function NotificationCenter() {
           {notifications.length > 0 && (
             <div className="notification-footer">
               <button onClick={() => {
-                navigate('/notifications');
+                navigate('/notifications?tab=notifications');
                 setShowDropdown(false);
               }}>
                 View All Notifications

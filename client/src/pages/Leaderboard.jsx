@@ -1,64 +1,40 @@
 // client/src/pages/Leaderboard.jsx - LOOMIO-INSPIRED UI
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Toast from '../components/Toast';
 import { FaTrophy, FaMedal } from 'react-icons/fa';
 import { useApp } from '../context/AppContext';
+import axios from 'axios';
 import './Dashboard.css';
 import './Leaderboard.css';
 
 function Leaderboard() {
   const navigate = useNavigate();
-  const { toasts, removeToast, currentUser, isAuthenticated, getAllTeamMembers, tasks } = useApp();
-
-  const leaderboardData = useMemo(() => {
-    if (!isAuthenticated || !currentUser) return [];
-
-    const members = getAllTeamMembers();
-    const memberStats = members.map(member => {
-      const memberTasks = tasks.filter(t => 
-        t.assignees?.some(a => a.id === member.id)
-      );
-      const completedTasks = memberTasks.filter(t => t.status === 'done').length;
-      const points = completedTasks * 10; // 10 points per completed task
-      
-      return {
-        id: member.id,
-        name: member.name,
-        email: member.email,
-        points,
-        tasksCompleted: completedTasks,
-        avatar: member.name?.substring(0, 2).toUpperCase() || 'U'
-      };
-    });
-
-    // Add current user if not in members
-    if (!memberStats.find(m => m.id === currentUser.id)) {
-      const userTasks = tasks.filter(t => 
-        t.assignees?.some(a => a.id === currentUser.id)
-      );
-      const completedTasks = userTasks.filter(t => t.status === 'done').length;
-      memberStats.push({
-        id: currentUser.id,
-        name: currentUser.name,
-        email: currentUser.email,
-        points: completedTasks * 10,
-        tasksCompleted: completedTasks,
-        avatar: currentUser.name?.substring(0, 2).toUpperCase() || 'U'
-      });
-    }
-
-    // Sort by points descending
-    memberStats.sort((a, b) => b.points - a.points);
-    return memberStats;
-  }, [isAuthenticated, currentUser, tasks, getAllTeamMembers]);
+  const { toasts, removeToast, currentUser, isAuthenticated } = useApp();
+  const [leaderboardData, setLeaderboardData] = useState([]);
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
   useEffect(() => {
     if (!isAuthenticated || !currentUser) {
       navigate('/login', { replace: true });
+      return;
     }
-  }, [isAuthenticated, currentUser, navigate]);
+
+    const fetchLeaderboard = async () => {
+      try {
+        const token = localStorage.getItem('campusToken');
+        const response = await axios.get(`${API_URL}/leaderboard`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setLeaderboardData(response.data || []);
+      } catch (error) {
+        console.error('Error fetching leaderboard:', error);
+      }
+    };
+
+    fetchLeaderboard();
+  }, [isAuthenticated, currentUser, navigate, API_URL]);
 
   if (!isAuthenticated || !currentUser) {
     return null;
@@ -69,7 +45,7 @@ function Leaderboard() {
   const topThree = leaderboardData.slice(0, 3);
   const rest = leaderboardData.slice(3);
   const totalPoints = leaderboardData.reduce((sum, u) => sum + (u.points || 0), 0);
-  const totalCompleted = leaderboardData.reduce((sum, u) => sum + (u.tasksCompleted || 0), 0);
+  const totalCompleted = leaderboardData.reduce((sum, u) => sum + Number(u.tasks_completed_on_time || 0), 0);
 
   const getRankIcon = (rank) => {
     if (rank === 1) return <FaTrophy className="rank-icon gold" />;
@@ -77,6 +53,10 @@ function Leaderboard() {
     if (rank === 3) return <FaMedal className="rank-icon bronze" />;
     return <span className="rank-number">#{rank}</span>;
   };
+
+  const getAvatarText = (user) => user?.name?.substring(0, 2).toUpperCase() || 'U';
+  const isImageAvatar = (avatar) => typeof avatar === 'string' &&
+    (avatar.startsWith('data:image/') || avatar.startsWith('http://') || avatar.startsWith('https://'));
 
   return (
     <div className="dashboard-container">
@@ -130,7 +110,13 @@ function Leaderboard() {
               {topThree.map((user, index) => (
                 <div key={user.id} className={`podium-card rank-${index + 1}`}>
                   <div className="podium-rank">{index + 1}</div>
-                  <div className="podium-avatar">{user.avatar}</div>
+                  <div className="podium-avatar">
+                    {isImageAvatar(user.avatar) ? (
+                      <img src={user.avatar} alt={user.name} className="avatar-image" />
+                    ) : (
+                      getAvatarText(user)
+                    )}
+                  </div>
                   <div className="podium-name">{user.name}</div>
                   <div className="podium-points">{user.points} pts</div>
                 </div>
@@ -163,7 +149,11 @@ function Leaderboard() {
                       {getRankIcon(index + 4)}
                     </div>
                     <div className="leaderboard-avatar">
-                      {user.avatar}
+                      {isImageAvatar(user.avatar) ? (
+                        <img src={user.avatar} alt={user.name} className="avatar-image" />
+                      ) : (
+                        getAvatarText(user)
+                      )}
                     </div>
                     <div className="leaderboard-info">
                       <span className="leaderboard-name">
@@ -177,8 +167,8 @@ function Leaderboard() {
                         <span className="stat-value points">{user.points}</span>
                       </div>
                       <div className="stat-column">
-                        <span className="stat-label">Tasks</span>
-                        <span className="stat-value">{user.tasksCompleted}</span>
+                        <span className="stat-label">On Time</span>
+                        <span className="stat-value">{user.tasks_completed_on_time}</span>
                       </div>
                     </div>
                   </div>

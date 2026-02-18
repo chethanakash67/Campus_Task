@@ -21,13 +21,13 @@
 }
 
 .assigned-stat-card:hover {
-  border-color: #0ea5e9;
-  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.1);
+  border-color: #000000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
 .assigned-stat-card.overdue {
-  border-color: #fee2e2;
-  background: #fef2f2;
+  border-color: #e5e7eb;
+  background: #f9fafb;
 }
 
 .assigned-stat-card .stat-card-header {
@@ -48,28 +48,28 @@
 }
 
 .assigned-stat-card .stat-icon.total {
-  background: #eff6ff;
-  color: #0ea5e9;
+  background: #f3f4f6;
+  color: #111827;
 }
 
 .assigned-stat-card .stat-icon.todo {
   background: #f3f4f6;
-  color: #6b7280;
+  color: #4b5563;
 }
 
 .assigned-stat-card .stat-icon.progress {
-  background: #fef3c7;
-  color: #d97706;
+  background: #f3f4f6;
+  color: #111827;
 }
 
 .assigned-stat-card .stat-icon.done {
-  background: #d1fae5;
-  color: #059669;
+  background: #111827;
+  color: #ffffff;
 }
 
 .assigned-stat-card .stat-icon.overdue {
-  background: #fee2e2;
-  color: #dc2626;
+  background: #f3f4f6;
+  color: #111827;
 }
 
 .assigned-stat-card .stat-label {
@@ -98,8 +98,8 @@
 }
 
 .assigned-stat-card .stat-trend.positive {
-  background: #d1fae5;
-  color: #059669;
+  background: #f3f4f6;
+  color: #111827;
 }
 
 /* Filter Bar */
@@ -152,14 +152,19 @@
 
 .loading-state .spinner {
   font-size: 32px;
-  color: #0ea5e9;
+  color: #000000;
   animation: spin 1s linear infinite;
   margin-bottom: 16px;
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .loading-state p {
@@ -215,9 +220,17 @@
   border-radius: 50%;
 }
 
-.status-dot.grey { background: #9ca3af; }
-.status-dot.blue { background: #0ea5e9; }
-.status-dot.green { background: #10b981; }
+.status-dot.grey {
+  background: #e5e7eb;
+}
+
+.status-dot.blue {
+  background: #374151;
+}
+
+.status-dot.green {
+  background: #000000;
+}
 
 /* Task List */
 .task-list {
@@ -254,8 +267,8 @@
 }
 
 .task-card:hover {
-  border-color: #0ea5e9;
-  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.1);
+  border-color: #000000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   transform: translateY(-2px);
 }
 
@@ -264,16 +277,16 @@
 }
 
 .task-card.overdue-card {
-  border-color: #fecaca;
-  background: #fef2f2;
+  border-color: #e5e7eb;
+  background: #f9fafb;
 }
 
 .task-card.team-task-card {
-  border-left: 3px solid #8b5cf6;
+  border-left: 3px solid #111827;
 }
 
 .task-card.personal-task-card {
-  border-left: 3px solid #0ea5e9;
+  border-left: 3px solid #9ca3af;
 }
 
 .task-type-badge {
@@ -281,8 +294,8 @@
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  color: #7c3aed;
-  background: #f3e8ff;
+  color: #111827;
+  background: #f3f4f6;
   padding: 4px 10px;
   border-radius: 12px;
   margin-bottom: 10px;
@@ -309,18 +322,18 @@
 }
 
 .priority-tag.high {
-  background: #fee2e2;
-  color: #dc2626;
+  background: #111827;
+  color: #ffffff;
 }
 
 .priority-tag.medium {
-  background: #fef3c7;
-  color: #d97706;
+  background: #9ca3af;
+  color: #ffffff;
 }
 
 .priority-tag.low {
-  background: #d1fae5;
-  color: #059669;
+  background: #e5e7eb;
+  color: #1f2937;
 }
 
 .task-card h3 {
@@ -371,15 +384,15 @@
 }
 
 .status-btn.in-progress:hover {
-  background: #fef3c7;
-  border-color: #f59e0b;
-  color: #d97706;
+  background: #f3f4f6;
+  border-color: #000000;
+  color: #000000;
 }
 
 .status-btn.done:hover {
-  background: #d1fae5;
-  border-color: #10b981;
-  color: #059669;
+  background: #111827;
+  border-color: #111827;
+  color: #ffffff;
 }
 
 /* Task Footer */
@@ -407,25 +420,25 @@
   .board-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .board-column {
     min-height: auto;
   }
-  
+
   .assigned-stats-row {
     padding: 0 16px;
   }
-  
+
   .assigned-filter-bar {
     padding: 0 16px;
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .filter-select-wrapper {
     width: 100%;
   }
-  
+
   .filter-select {
     width: 100%;
   }
@@ -437,12 +450,12 @@
     overflow-x: auto;
     padding-bottom: 8px;
   }
-  
+
   .assigned-stat-card {
     min-width: 130px;
     flex: 0 0 auto;
   }
-  
+
   .board-grid {
     padding: 0 16px 16px;
   }
@@ -454,13 +467,13 @@
 
 /* Late Submission Card - visual distinction */
 .task-card.late-submission-card {
-  border-left: 4px solid #f59e0b;
-  background: linear-gradient(135deg, #fffbeb 0%, #ffffff 100%);
+  border-left: 4px solid #4b5563;
+  background: #f9fafb;
 }
 
 .task-card.late-submission-card:hover {
-  border-color: #d97706;
-  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15);
+  border-color: #000000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
 /* Late Submission Badge */
@@ -469,13 +482,13 @@
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  background: #fef3c7;
-  color: #d97706;
+  background: #f3f4f6;
+  color: #111827;
   border-radius: 6px;
   font-size: 11px;
   font-weight: 600;
   margin-bottom: 10px;
-  border: 1px solid #fcd34d;
+  border: 1px solid #e5e7eb;
 }
 
 .late-submission-badge .badge-icon {
@@ -493,20 +506,20 @@
 }
 
 .status-label.on-time {
-  background: #d1fae5;
-  color: #059669;
+  background: #f3f4f6;
+  color: #111827;
 }
 
 .status-label.late {
-  background: #fef3c7;
-  color: #d97706;
+  background: #f3f4f6;
+  color: #4b5563;
 }
 
 /* Due Date Late Styling */
 .due-date.late {
-  color: #d97706;
+  color: #111827;
   font-weight: 600;
-  background: #fef3c7;
+  background: #f3f4f6;
   padding: 2px 8px;
   border-radius: 4px;
 }
@@ -517,18 +530,18 @@
 }
 
 .tasks-tab.overdue:hover {
-  background: #fee2e2;
+  background: #f3f4f6;
 }
 
 .tasks-tab.overdue.active {
-  background: #fee2e2;
-  color: #dc2626;
-  border-bottom-color: #dc2626;
+  background: #f3f4f6;
+  color: #111827;
+  border-bottom-color: #111827;
 }
 
 .tab-count.overdue {
-  background: #fee2e2;
-  color: #dc2626;
+  background: #e5e7eb;
+  color: #111827;
 }
 
 /* Empty State Enhancement for Filtered Views */
@@ -563,8 +576,8 @@
   width: 48px;
   height: 48px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
-  color: #ffffff;
+  background: #f3f4f6;
+  color: #111827;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -599,7 +612,7 @@
   display: block;
   font-size: 28px;
   font-weight: 700;
-  color: #0ea5e9;
+  color: #111827;
 }
 
 .filter-view-count .count-label {
@@ -671,8 +684,8 @@
 }
 
 .detailed-task-card:hover {
-  border-color: #0ea5e9;
-  box-shadow: 0 4px 16px rgba(14, 165, 233, 0.1);
+  border-color: #000000;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
   transform: translateY(-2px);
 }
 
@@ -688,23 +701,23 @@
 }
 
 .task-status-indicator.pending {
-  background: #fef3c7;
-  color: #d97706;
+  background: #f3f4f6;
+  color: #111827;
 }
 
 .task-status-indicator.completed {
-  background: #d1fae5;
-  color: #059669;
+  background: #111827;
+  color: #ffffff;
 }
 
 .task-status-indicator.late {
-  background: #fef3c7;
-  color: #d97706;
+  background: #f3f4f6;
+  color: #4b5563;
 }
 
 .task-status-indicator.overdue {
-  background: #fee2e2;
-  color: #dc2626;
+  background: #e5e7eb;
+  color: #111827;
 }
 
 /* Task Main Content */
@@ -742,18 +755,18 @@
 }
 
 .priority-badge.high {
-  background: #fee2e2;
-  color: #dc2626;
+  background: #111827;
+  color: #ffffff;
 }
 
 .priority-badge.medium {
-  background: #fef3c7;
-  color: #d97706;
+  background: #9ca3af;
+  color: #ffffff;
 }
 
 .priority-badge.low {
-  background: #d1fae5;
-  color: #059669;
+  background: #e5e7eb;
+  color: #1f2937;
 }
 
 .task-description {
@@ -786,14 +799,14 @@
 }
 
 .meta-item.team {
-  background: #f3e8ff;
-  color: #7c3aed;
+  background: #f3f4f6;
+  color: #111827;
   padding: 4px 10px;
   border-radius: 12px;
 }
 
 .meta-item.team .meta-icon {
-  color: #8b5cf6;
+  color: #4b5563;
 }
 
 .meta-item.due-date.danger {
@@ -933,6 +946,63 @@
 .action-btn.complete:hover {
   background: #10b981;
   color: #ffffff;
+}
+
+.action-btn.edit {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.action-btn.edit:hover {
+  background: #d1d5db;
+}
+
+.action-btn.delete {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.action-btn.delete:hover {
+  background: #fecaca;
+}
+
+.task-actions-inline {
+  display: flex;
+  gap: 6px;
+}
+
+.tasks-sort-select {
+  min-width: 170px;
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #374151;
+  font-size: 14px;
+  outline: none;
+}
+
+.focus-mode-btn {
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #374151;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.focus-mode-btn:hover {
+  background: #f9fafb;
+}
+
+.focus-mode-btn.active {
+  background: #111827;
+  color: #ffffff;
+  border-color: #111827;
 }
 
 /* Detailed Card Status Variants */

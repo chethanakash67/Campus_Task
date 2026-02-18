@@ -11,15 +11,15 @@ import './Teams.css';
 
 function Teams() {
   const navigate = useNavigate();
-  const { 
-    teams, 
+  const {
+    teams,
     tasks,
-    addTeam, 
-    updateTeam, 
-    deleteTeam, 
+    addTeam,
+    updateTeam,
+    deleteTeam,
     addTask,
     addToast,
-    toasts, 
+    toasts,
     removeToast,
     currentUser,
     isAuthenticated,
@@ -35,13 +35,13 @@ function Teams() {
       navigate('/login');
     }
   }, [isAuthenticated, currentUser, navigate]);
-  
+
   const [showModal, setShowModal] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [editingTeam, setEditingTeam] = useState(null);
   const [selectedTeamForTask, setSelectedTeamForTask] = useState(null);
   const [expandedTeam, setExpandedTeam] = useState(null);
-  
+
   const [newTeam, setNewTeam] = useState({
     name: '',
     description: '',
@@ -49,7 +49,7 @@ function Teams() {
     members: [],
     isPublic: true
   });
-  
+
   const [newMember, setNewMember] = useState({
     name: '',
     role: 'Member',
@@ -93,7 +93,7 @@ function Teams() {
   };
 
   // Filter teams based on search
-  const filteredTeams = teams.filter(team => 
+  const filteredTeams = teams.filter(team =>
     team.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     team.description?.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -115,6 +115,11 @@ function Teams() {
 
   const addMemberToTeam = () => {
     if (newMember.name.trim() && newMember.email.trim()) {
+      const normalizedEmail = newMember.email.trim().toLowerCase();
+      if (newTeam.members.some(m => m.email?.toLowerCase() === normalizedEmail)) {
+        addToast('Member already added', 'info');
+        return;
+      }
       const memberToAdd = {
         id: newMember.name.substring(0, 2).toUpperCase(),
         ...newMember
@@ -127,34 +132,34 @@ function Teams() {
     }
   };
 
-  const removeMemberFromTeam = (memberId) => {
+  const removeMemberFromTeam = (memberEmail) => {
     setNewTeam({
       ...newTeam,
-      members: newTeam.members.filter(m => m.id !== memberId)
+      members: newTeam.members.filter(m => m.email?.toLowerCase() !== memberEmail?.toLowerCase())
     });
   };
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  if (!newTeam.name.trim()) {
-    addToast('Team name is required', 'error');
-    return;
-  }
-
-  try {
-    if (editingTeam) {
-      console.log('Submitting team update:', editingTeam.id, newTeam); // Debug
-      await updateTeam(editingTeam.id, newTeam);
-      resetForm();
-    } else {
-      await addTeam(newTeam);
-      resetForm();
+    e.preventDefault();
+    if (!newTeam.name.trim()) {
+      addToast('Team name is required', 'error');
+      return;
     }
-  } catch (error) {
-    console.error('Submit error:', error);
-    // Don't reset form on error so user can try again
-  }
-};
+
+    try {
+      if (editingTeam) {
+        console.log('Submitting team update:', editingTeam.id, newTeam); // Debug
+        await updateTeam(editingTeam.id, newTeam);
+        resetForm();
+      } else {
+        await addTeam(newTeam);
+        resetForm();
+      }
+    } catch (error) {
+      console.error('Submit error:', error);
+      // Don't reset form on error so user can try again
+    }
+  };
 
   const resetForm = () => {
     setShowModal(false);
@@ -170,16 +175,16 @@ function Teams() {
   };
 
   const handleEdit = (team) => {
-  setEditingTeam(team);
-  setNewTeam({
-    name: team.name,
-    description: team.description,
-    color: team.color,
-    members: team.members || [],
-    isPublic: team.is_public ?? true
-  });
-  setShowModal(true);
-};
+    setEditingTeam(team);
+    setNewTeam({
+      name: team.name,
+      description: team.description,
+      color: team.color,
+      members: team.members || [],
+      isPublic: team.is_public ?? true
+    });
+    setShowModal(true);
+  };
 
   const handleDelete = (teamId) => {
     if (window.confirm('Are you sure you want to delete this team? Team tasks will become personal tasks.')) {
@@ -254,12 +259,11 @@ function Teams() {
   };
 
   useEffect(() => {
-    if (!expandedTeam) return;
-    const team = teams.find(t => t.id === expandedTeam);
-    if (team?.is_leader) {
-      fetchJoinRequests(expandedTeam);
-    }
-  }, [expandedTeam, teams, fetchJoinRequests]);
+    const ownerPrivateTeams = teams.filter(t => t.is_owner && !t.is_public);
+    ownerPrivateTeams.forEach(team => {
+      fetchJoinRequests(team.id);
+    });
+  }, [teams, fetchJoinRequests]);
 
   // Get tasks for a specific team
   const getTeamTasks = (teamId) => {
@@ -300,7 +304,7 @@ function Teams() {
     <div className="dashboard-container">
       <Sidebar />
       <Toast toasts={toasts} removeToast={removeToast} />
-      
+
       <main className="main-content">
         {/* Page Header Card - Loomio Style */}
         <div className="page-header-card">
@@ -365,9 +369,18 @@ function Teams() {
                 const stats = getTeamStats(team.id);
                 const teamTasks = getTeamTasks(team.id);
                 const isExpanded = expandedTeam === team.id;
-                
+
                 return (
-                  <div key={team.id} className={`team-list-item ${isExpanded ? 'expanded' : ''}`}>
+                  <div
+                    key={team.id}
+                    className={`team-list-item ${isExpanded ? 'expanded' : ''}`}
+                    onClick={(e) => {
+                      // Prevent navigation if clicking on action buttons or their children
+                      if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.tasks-toggle-btn')) return;
+                      navigate(`/teams/${team.id}/chat`);
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  >
                     <div className="team-item-main">
                       <div className="team-item-left">
                         <div className={`team-avatar ${team.color}`}>
@@ -392,11 +405,12 @@ function Teams() {
                           </div>
                         </div>
                       </div>
+
                       <div className="team-item-right">
                         <div className="team-members-avatars">
                           {team.members.slice(0, 4).map((member, idx) => (
-                            <div 
-                              key={member.id} 
+                            <div
+                              key={member.id}
                               className="member-avatar-small"
                               style={{ zIndex: 10 - idx }}
                               title={member.name}
@@ -411,396 +425,445 @@ function Teams() {
                           )}
                         </div>
                         <div className="team-item-actions">
-                          <button 
-                            className="btn btn-icon" 
-                            onClick={() => navigate(`/teams/${team.id}/chat`)}
+                          <button
+                            className="btn btn-icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/teams/${team.id}/chat`);
+                            }}
                             title="Team Chat"
                           >
                             <FaComment />
                           </button>
-                          <button 
-                            className="btn btn-icon" 
-                            onClick={() => handleCreateTaskForTeam(team)}
+                          <button
+                            className="btn btn-icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCreateTaskForTeam(team);
+                            }}
                             title="Create task"
                           >
                             <FaTasks />
                           </button>
-                          <button 
-                            className="btn btn-icon" 
-                            onClick={() => handleEdit(team)}
-                            title="Edit team"
-                          >
-                            <FaEdit />
-                          </button>
-                          <button 
-                            className="btn btn-icon delete" 
-                            onClick={() => handleDelete(team.id)}
-                            title="Delete team"
-                          >
-                            <FaTrash />
-                          </button>
+
+                          {/* Edit allows managing members (public: any member, private: owner/lead) */}
+                          {(team.is_owner || team.is_leader || team.is_public) && (
+                            <button
+                              className="btn btn-icon"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEdit(team);
+                              }}
+                              title="Manage team members"
+                            >
+                              <FaEdit />
+                            </button>
+                          )}
+                          {team.is_owner && (
+                            <>
+                              <button
+                                className="btn btn-icon delete"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDelete(team.id);
+                                }}
+                                title="Delete team"
+                              >
+                                <FaTrash />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
 
                     {/* Progress Bar */}
-                    {stats.total > 0 && (
-                      <div className="team-progress-section">
-                        <div className="progress-bar-container">
-                          <div 
-                            className="progress-bar-fill"
-                            style={{ width: `${(stats.completed / stats.total) * 100}%` }}
-                          ></div>
-                        </div>
-                        <span className="progress-text">
-                          {Math.round((stats.completed / stats.total) * 100)}% complete
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Expandable Tasks Preview */}
-                    {teamTasks.length > 0 && (
-                      <div className="team-tasks-section">
-                        <button 
-                          className="tasks-toggle-btn"
-                          onClick={() => toggleExpandTeam(team.id)}
-                        >
-                          <span>Recent Tasks ({teamTasks.length})</span>
-                          <span className="toggle-arrow">{isExpanded ? '▲' : '▼'}</span>
-                        </button>
-                        
-                        {isExpanded && (
-                          <div className="tasks-list-compact">
-                            {teamTasks.map(task => (
-                              <div key={task.id} className="task-list-item-compact">
-                                <span className={`priority-dot ${task.priority.toLowerCase()}`}></span>
-                                <span className="task-title-compact">{task.title}</span>
-                                <span className={`status-badge ${task.status}`}>
-                                  {task.status.replace('-', ' ')}
-                                </span>
-                              </div>
-                            ))}
+                    {
+                      stats.total > 0 && (
+                        <div className="team-progress-section">
+                          <div className="progress-bar-container">
+                            <div
+                              className="progress-bar-fill"
+                              style={{ width: `${(stats.completed / stats.total) * 100}%` }}
+                            ></div>
                           </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Leader-only Team Code + Join Link */}
-                    {team.is_leader && team.team_code && (
-                      <div className="team-code-section">
-                        <div className="team-code-info">
-                          <span className="team-code-label">Team Code</span>
-                          <span className="team-code-value">{team.team_code}</span>
-                        </div>
-                        <div className="team-code-actions">
-                          <button
-                            className="btn btn-secondary btn-small"
-                            onClick={() => copyToClipboard(team.team_code, 'Team code copied')}
-                          >
-                            Copy Code
-                          </button>
-                          <button
-                            className="btn btn-secondary btn-small"
-                            onClick={() => copyToClipboard(
-                              `${window.location.origin}/teams?code=${team.team_code}`,
-                              'Join link copied'
-                            )}
-                          >
-                            Copy Join Link
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Join Requests (Leader Only) */}
-                    {team.is_leader && isExpanded && (
-                      <div className="team-join-requests">
-                        <div className="join-requests-header">
-                          <span>Join Requests</span>
-                          <span className="join-requests-count">
-                            {(joinRequests[team.id] || []).length}
+                          <span className="progress-text">
+                            {Math.round((stats.completed / stats.total) * 100)}% complete
                           </span>
                         </div>
-                        {(joinRequests[team.id] || []).length === 0 ? (
-                          <div className="join-requests-empty">No pending requests</div>
-                        ) : (
-                          <div className="join-requests-list">
-                            {(joinRequests[team.id] || []).map(req => (
-                              <div key={req.id} className="join-request-item">
-                                <div className="join-request-info">
-                                  <div className="join-request-name">{req.name}</div>
-                                  <div className="join-request-email">{req.email}</div>
+                      )
+                    }
+
+                    {/* Expandable Tasks Preview */}
+                    {
+                      teamTasks.length > 0 && (
+                        <div className="team-tasks-section">
+                          <button
+                            className="tasks-toggle-btn"
+                            onClick={() => toggleExpandTeam(team.id)}
+                          >
+                            <span>Recent Tasks ({teamTasks.length})</span>
+                            <span className="toggle-arrow">{isExpanded ? '▲' : '▼'}</span>
+                          </button>
+
+                          {isExpanded && (
+                            <div className="tasks-list-compact">
+                              {teamTasks.map(task => (
+                                <div key={task.id} className="task-list-item-compact">
+                                  <span className={`priority-dot ${task.priority.toLowerCase()}`}></span>
+                                  <span className="task-title-compact">{task.title}</span>
+                                  <span className={`status-badge ${task.status}`}>
+                                    {task.status.replace('-', ' ')}
+                                  </span>
                                 </div>
-                                <div className="join-request-actions">
-                                  <button
-                                    className="btn btn-secondary btn-small"
-                                    onClick={() => approveJoinRequest(team.id, req.id)}
-                                  >
-                                    Accept
-                                  </button>
-                                  <button
-                                    className="btn btn-secondary btn-small"
-                                    onClick={() => rejectJoinRequest(team.id, req.id)}
-                                  >
-                                    Decline
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    }
+
+                    {/* Team Code + Join Link */}
+                    {
+                      team.team_code && (
+                        <div className="team-code-section">
+                          <div className="team-code-info">
+                            <span className="team-code-label">Team Code</span>
+                            <span className="team-code-value">{team.team_code}</span>
                           </div>
-                        )}
-                      </div>
-                    )}
+                          <div className="team-code-actions">
+                            <button
+                              className="btn btn-secondary btn-small"
+                              onClick={() => copyToClipboard(team.team_code, 'Team code copied')}
+                            >
+                              Copy Code
+                            </button>
+                            <button
+                              className="btn btn-secondary btn-small"
+                              onClick={() => copyToClipboard(
+                                `${window.location.origin}/teams?code=${team.team_code}`,
+                                'Join link copied'
+                              )}
+                            >
+                              Copy Join Link
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    }
+
+                    {/* Join Requests (Private Team Owner Only) */}
+                    {
+                      team.is_owner && !team.is_public && (
+                        <div className="team-join-requests">
+                          <div className="join-requests-header">
+                            <span>Join Requests</span>
+                            <span className="join-requests-count">
+                              {(joinRequests[team.id] || []).length}
+                            </span>
+                          </div>
+                          {(joinRequests[team.id] || []).length === 0 ? (
+                            <div className="join-requests-empty">No pending requests</div>
+                          ) : (
+                            <div className="join-requests-list">
+                              {(joinRequests[team.id] || []).map(req => (
+                                <div key={req.id} className="join-request-item">
+                                  <div className="join-request-info">
+                                    <div className="join-request-name">{req.name}</div>
+                                    <div className="join-request-email">{req.email}</div>
+                                  </div>
+                                  <div className="join-request-actions">
+                                    <button
+                                      className="btn btn-secondary btn-small"
+                                      onClick={() => approveJoinRequest(team.id, req.id)}
+                                    >
+                                      Accept
+                                    </button>
+                                    <button
+                                      className="btn btn-secondary btn-small"
+                                      onClick={() => rejectJoinRequest(team.id, req.id)}
+                                    >
+                                      Decline
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    }
                   </div>
                 );
               })}
             </div>
-          )}
+          )
+          }
         </div>
 
         {/* Create/Edit Team Modal */}
-        {showModal && (
-          <div className="modal-overlay">
-            <div className="modal-content modal-large">
-              <div className="modal-header">
-                <h2>{editingTeam ? 'Edit Team' : 'Create New Team'}</h2>
-                <button className="close-btn" onClick={resetForm}>
-                  <FaTimes />
-                </button>
-              </div>
-              
-              <form onSubmit={handleSubmit}>
-                <div className="form-group">
-                  <label>Team Name *</label>
-                  <input 
-                    type="text" 
-                    name="name" 
-                    placeholder="e.g., Engineering Team" 
-                    value={newTeam.name} 
-                    onChange={handleInputChange} 
-                    required 
-                  />
+        {
+          showModal && (
+            <div className="modal-overlay">
+              <div className="modal-content modal-large">
+                <div className="modal-header">
+                  <h2>{editingTeam ? 'Edit Team' : 'Create New Team'}</h2>
+                  <button className="close-btn" onClick={resetForm}>
+                    <FaTimes />
+                  </button>
                 </div>
 
-                <div className="form-group">
-                  <label>Description</label>
-                  <textarea
-                    name="description"
-                    placeholder="What is this team working on?"
-                    value={newTeam.description}
-                    onChange={handleInputChange}
-                    rows={3}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Team Color</label>
-                  <div className="color-selector">
-                    {colors.map(color => (
-                      <div
-                        key={color}
-                        className={`color-option ${color} ${newTeam.color === color ? 'selected' : ''}`}
-                        onClick={() => setNewTeam({ ...newTeam, color })}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label>Team Visibility</label>
-                  <div className="visibility-toggle">
-                    <button
-                      type="button"
-                      className={`visibility-option ${newTeam.isPublic ? 'active' : ''}`}
-                      onClick={() => setNewTeam({ ...newTeam, isPublic: true })}
-                    >
-                      Public
-                    </button>
-                    <button
-                      type="button"
-                      className={`visibility-option ${!newTeam.isPublic ? 'active' : ''}`}
-                      onClick={() => setNewTeam({ ...newTeam, isPublic: false })}
-                    >
-                      Private
-                    </button>
-                  </div>
-                  <p className="visibility-help">
-                    {newTeam.isPublic
-                      ? 'Anyone with the team code can join instantly.'
-                      : 'Join requests require approval by the team lead.'}
-                  </p>
-                </div>
-
-                <div className="form-group">
-                  <label>Team Members</label>
-                  <div className="members-manager">
-                    {newTeam.members.map(member => (
-                      <div key={member.id} className="member-tag">
-                        <div className="mini-avatar">{member.id}</div>
-                        <span>{member.name} - {member.role}</span>
-                        <button 
-                          type="button" 
-                          onClick={() => removeMemberFromTeam(member.id)}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  
-                  <div className="add-member-form">
+                <form onSubmit={handleSubmit}>
+                  <div className="form-group">
+                    <label>Team Name *</label>
                     <input
                       type="text"
                       name="name"
-                      placeholder="Member name"
-                      value={newMember.name}
-                      onChange={handleMemberInputChange}
+                      placeholder="e.g., Engineering Team"
+                      value={newTeam.name}
+                      onChange={handleInputChange}
+                      disabled={!!editingTeam && !editingTeam.is_owner}
+                      required
                     />
-                    <input
-                      type="email"
-                      name="email"
-                      placeholder="Email"
-                      value={newMember.email}
-                      onChange={handleMemberInputChange}
-                    />
-                    <select
-                      name="role"
-                      value={newMember.role}
-                      onChange={handleMemberInputChange}
-                    >
-                      <option value="Lead">Lead</option>
-                      <option value="Developer">Developer</option>
-                      <option value="Designer">Designer</option>
-                      <option value="Member">Member</option>
-                    </select>
-                    <button 
-                      type="button" 
-                      className="btn-add" 
-                      onClick={addMemberToTeam}
-                    >
-                      Add
-                    </button>
                   </div>
-                </div>
 
-                <button type="submit" className="btn btn-full">
-                  {editingTeam ? 'Update Team' : 'Create Team'}
-                </button>
-              </form>
+                  <div className="form-group">
+                    <label>Description</label>
+                    <textarea
+                      name="description"
+                      placeholder="What is this team working on?"
+                      value={newTeam.description}
+                      onChange={handleInputChange}
+                      disabled={!!editingTeam && !editingTeam.is_owner}
+                      rows={3}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Team Color</label>
+                    <div className="color-selector">
+                      {colors.map(color => (
+                        <div
+                          key={color}
+                          className={`color-option ${color} ${newTeam.color === color ? 'selected' : ''}`}
+                          onClick={() => {
+                            if (editingTeam && !editingTeam.is_owner) return;
+                            setNewTeam({ ...newTeam, color });
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Team Visibility</label>
+                    <div className="visibility-toggle">
+                      <button
+                        type="button"
+                        className={`visibility-option ${newTeam.isPublic ? 'active' : ''}`}
+                        onClick={() => setNewTeam({ ...newTeam, isPublic: true })}
+                        disabled={!!editingTeam && !editingTeam.is_owner}
+                      >
+                        Public
+                      </button>
+                      <button
+                        type="button"
+                        className={`visibility-option ${!newTeam.isPublic ? 'active' : ''}`}
+                        onClick={() => setNewTeam({ ...newTeam, isPublic: false })}
+                        disabled={!!editingTeam && !editingTeam.is_owner}
+                      >
+                        Private
+                      </button>
+                    </div>
+                    <p className="visibility-help">
+                      {newTeam.isPublic
+                        ? 'Anyone with the team code can join instantly and any member can invite.'
+                        : 'Join requests require owner approval. Only owner/delegated leads can invite.'}
+                    </p>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Team Members</label>
+                    <div className="members-manager">
+                      {newTeam.members.map(member => (
+                        <div key={member.email || member.id} className="member-tag">
+                          <div className="mini-avatar">{member.id}</div>
+                          <span>{member.name} - {member.role}</span>
+                          {/* Owner-only removal when editing existing teams */}
+                          {(!editingTeam || editingTeam.is_owner) && (
+                            <button
+                              type="button"
+                              onClick={() => removeMemberFromTeam(member.email)}
+                            >
+                              ×
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="add-member-form">
+                      <input
+                        type="text"
+                        name="name"
+                        placeholder="Member name"
+                        value={newMember.name}
+                        onChange={handleMemberInputChange}
+                        disabled={!!editingTeam && !(editingTeam.is_public || editingTeam.is_owner || editingTeam.is_leader)}
+                      />
+                      <input
+                        type="email"
+                        name="email"
+                        placeholder="Email"
+                        value={newMember.email}
+                        onChange={handleMemberInputChange}
+                        disabled={!!editingTeam && !(editingTeam.is_public || editingTeam.is_owner || editingTeam.is_leader)}
+                      />
+                      <select
+                        name="role"
+                        value={newMember.role}
+                        onChange={handleMemberInputChange}
+                        disabled={!!editingTeam && !(editingTeam.is_public || editingTeam.is_owner || editingTeam.is_leader)}
+                      >
+                        <option value="Lead">Lead</option>
+                        <option value="Developer">Developer</option>
+                        <option value="Designer">Designer</option>
+                        <option value="Member">Member</option>
+                      </select>
+                      <button
+                        type="button"
+                        className="btn-add"
+                        onClick={addMemberToTeam}
+                        disabled={!!editingTeam && !(editingTeam.is_public || editingTeam.is_owner || editingTeam.is_leader)}
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+
+                  <button type="submit" className="btn btn-full">
+                    {editingTeam ? 'Update Team' : 'Create Team'}
+                  </button>
+                </form>
+              </div>
             </div>
-          </div>
-        )}
+          )
+        }
 
         {/* Quick Create Task Modal */}
-        {showTaskModal && selectedTeamForTask && (
-          <div className="modal-overlay">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h2>Create Task for {selectedTeamForTask.name}</h2>
-                <button className="close-btn" onClick={() => {
-                  setShowTaskModal(false);
-                  setSelectedTeamForTask(null);
-                }}>
-                  <FaTimes />
-                </button>
-              </div>
-              
-              <form onSubmit={handleTaskSubmit}>
-                <div className="form-group">
-                  <label>Task Title *</label>
-                  <input 
-                    type="text" 
-                    name="title" 
-                    placeholder="What needs to be done?" 
-                    value={newTask.title} 
-                    onChange={handleTaskInputChange} 
-                    required 
-                  />
+        {
+          showTaskModal && selectedTeamForTask && (
+            <div className="modal-overlay">
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h2>Create Task for {selectedTeamForTask.name}</h2>
+                  <button className="close-btn" onClick={() => {
+                    setShowTaskModal(false);
+                    setSelectedTeamForTask(null);
+                  }}>
+                    <FaTimes />
+                  </button>
                 </div>
 
-                <div className="form-group">
-                  <label>Description</label>
-                  <textarea
-                    name="description"
-                    placeholder="Add details..."
-                    value={newTask.description}
-                    onChange={handleTaskInputChange}
-                    rows={3}
-                  />
-                </div>
-
-                <div className="form-row">
+                <form onSubmit={handleTaskSubmit}>
                   <div className="form-group">
-                    <label>Priority</label>
-                    <select name="priority" value={newTask.priority} onChange={handleTaskInputChange}>
-                      <option value="Low">Low</option>
-                      <option value="Medium">Medium</option>
-                      <option value="High">High</option>
-                    </select>
-                  </div>
-
-                  <div className="form-group">
-                    <label>Due Date</label>
+                    <label>Task Title *</label>
                     <input
-                      type="date"
-                      name="dueDate"
-                      value={newTask.dueDate}
+                      type="text"
+                      name="title"
+                      placeholder="What needs to be done?"
+                      value={newTask.title}
                       onChange={handleTaskInputChange}
+                      required
                     />
                   </div>
-                </div>
 
-                <div className="form-group">
-                  <label>Assign To *</label>
-                  <div className="assignee-selector">
-                    {selectedTeamForTask.members.map(member => (
-                      <div 
-                        key={member.id} 
-                        className={`assignee-option ${newTask.assignees.some(a => a.id === member.id) ? 'selected' : ''}`}
-                        onClick={() => toggleTaskAssignee(member)}
-                      >
-                        <div className="mini-avatar">{member.id}</div>
-                        <span>{member.name}</span>
-                      </div>
-                    ))}
+                  <div className="form-group">
+                    <label>Description</label>
+                    <textarea
+                      name="description"
+                      placeholder="Add details..."
+                      value={newTask.description}
+                      onChange={handleTaskInputChange}
+                      rows={3}
+                    />
                   </div>
-                </div>
 
-                <button type="submit" className="btn btn-full">Create Task</button>
-              </form>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Priority</label>
+                      <select name="priority" value={newTask.priority} onChange={handleTaskInputChange}>
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label>Due Date</label>
+                      <input
+                        type="date"
+                        name="dueDate"
+                        value={newTask.dueDate}
+                        onChange={handleTaskInputChange}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Assign To *</label>
+                    <div className="assignee-selector">
+                      {selectedTeamForTask.members.map(member => (
+                        <div
+                          key={member.id}
+                          className={`assignee-option ${newTask.assignees.some(a => a.id === member.id) ? 'selected' : ''}`}
+                          onClick={() => toggleTaskAssignee(member)}
+                        >
+                          <div className="mini-avatar">{member.id}</div>
+                          <span>{member.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button type="submit" className="btn btn-full">Create Task</button>
+                </form>
+              </div>
             </div>
-          </div>
-        )}
+          )
+        }
 
         {/* Join Team Modal */}
-        {showJoinModal && (
-          <div className="modal-overlay">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h2>Join a Team</h2>
-                <button className="close-btn" onClick={() => setShowJoinModal(false)}>
-                  <FaTimes />
-                </button>
-              </div>
-              <form onSubmit={handleJoinSubmit}>
-                <div className="form-group">
-                  <label>Team Code</label>
-                  <input
-                    type="text"
-                    placeholder="Enter team code"
-                    value={joinCode}
-                    onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                  />
+        {
+          showJoinModal && (
+            <div className="modal-overlay">
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h2>Join a Team</h2>
+                  <button className="close-btn" onClick={() => setShowJoinModal(false)}>
+                    <FaTimes />
+                  </button>
                 </div>
-                <button type="submit" className="btn btn-full" disabled={joinLoading}>
-                  {joinLoading ? 'Joining...' : 'Join Team'}
-                </button>
-              </form>
+                <form onSubmit={handleJoinSubmit}>
+                  <div className="form-group">
+                    <label>Team Code</label>
+                    <input
+                      type="text"
+                      placeholder="Enter team code"
+                      value={joinCode}
+                      onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                    />
+                  </div>
+                  <button type="submit" className="btn btn-full" disabled={joinLoading}>
+                    {joinLoading ? 'Joining...' : 'Join Team'}
+                  </button>
+                </form>
+              </div>
             </div>
-          </div>
-        )}
-      </main>
-    </div>
+          )
+        }
+      </main >
+    </div >
   );
 }
 

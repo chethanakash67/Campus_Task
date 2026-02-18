@@ -1,6 +1,6 @@
 // client/src/components/TaskDetailDrawer.jsx
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   FaTimes, FaCalendarAlt, FaFlag, FaUser, FaUsers, FaClock,
   FaCheckCircle, FaExclamationTriangle, FaHistory, FaEdit,
   FaPaperclip, FaComment, FaSave, FaSpinner
@@ -50,7 +50,7 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
 
   const handleProgressUpdate = async () => {
     if (!isAssigned) return;
-    
+
     setIsSubmitting(true);
     try {
       const token = localStorage.getItem('campusToken');
@@ -60,7 +60,7 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
+
       setUpdateNote('');
       fetchActivityLog();
       if (onTaskUpdate) {
@@ -143,14 +143,14 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
         <div className="drawer-header">
           <div className="drawer-header-top">
             <div className="header-badges">
-              <span 
+              <span
                 className="status-badge"
                 style={{ backgroundColor: `${statusInfo.color}20`, color: statusInfo.color }}
               >
                 {statusInfo.icon}
                 {statusInfo.label}
               </span>
-              <span 
+              <span
                 className="priority-badge"
                 style={{ backgroundColor: `${priorityInfo.color}20`, color: priorityInfo.color }}
               >
@@ -173,19 +173,19 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
 
         {/* Tabs */}
         <div className="drawer-tabs">
-          <button 
+          <button
             className={`drawer-tab ${activeTab === 'details' ? 'active' : ''}`}
             onClick={() => setActiveTab('details')}
           >
             Details
           </button>
-          <button 
+          <button
             className={`drawer-tab ${activeTab === 'progress' ? 'active' : ''}`}
             onClick={() => setActiveTab('progress')}
           >
             Progress
           </button>
-          <button 
+          <button
             className={`drawer-tab ${activeTab === 'activity' ? 'active' : ''}`}
             onClick={() => setActiveTab('activity')}
           >
@@ -205,7 +205,7 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
                   <span className="progress-value">{task.progress || 0}%</span>
                 </div>
                 <div className="progress-bar-container">
-                  <div 
+                  <div
                     className="progress-bar-fill"
                     style={{ width: `${task.progress || 0}%` }}
                   />
@@ -263,14 +263,14 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
               <div className="detail-section">
                 <h4 className="section-label">Assigned to</h4>
                 <div className="assignees-list">
-                  {task.assignees?.length > 0 ? (
+                  {task.assignees && task.assignees.length > 0 ? (
                     task.assignees.map(assignee => (
                       <div key={assignee.id} className="assignee-item">
                         <div className="assignee-avatar">
                           {assignee.name?.charAt(0).toUpperCase() || 'U'}
                         </div>
                         <span className="assignee-name">
-                          {assignee.name}
+                          {assignee.name || 'Unknown'}
                           {assignee.id === currentUser?.id && ' (You)'}
                         </span>
                       </div>
@@ -282,7 +282,7 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
               </div>
 
               {/* Tags */}
-              {task.tags?.length > 0 && (
+              {task.tags && task.tags.length > 0 && (
                 <div className="detail-section">
                   <h4 className="section-label">Tags</h4>
                   <div className="tags-list">
@@ -300,7 +300,7 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
             <div className="tab-content progress-tab">
               <div className="progress-update-section">
                 <h4 className="section-title">Update Progress</h4>
-                
+
                 {isAssigned ? (
                   <>
                     <div className="progress-slider-section">
@@ -333,7 +333,7 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
                       />
                     </div>
 
-                    <button 
+                    <button
                       className="submit-update-btn"
                       onClick={handleProgressUpdate}
                       disabled={isSubmitting}
@@ -362,7 +362,7 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
                 <div className="current-progress-display">
                   <h4>Current Progress</h4>
                   <div className="large-progress-bar">
-                    <div 
+                    <div
                       className="large-progress-fill"
                       style={{ width: `${task.progress || 0}%` }}
                     />
@@ -384,7 +384,7 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
           {activeTab === 'activity' && (
             <div className="tab-content activity-tab">
               <h4 className="section-title">Activity Timeline</h4>
-              
+
               {loadingActivity ? (
                 <div className="loading-activity">
                   <FaSpinner className="spinner" />

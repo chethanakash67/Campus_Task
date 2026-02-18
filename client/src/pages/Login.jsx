@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import axios from 'axios';
-import { Mail, Lock, Eye, EyeOff, AlertCircle, ArrowLeft, CheckCircle, Users, Calendar } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, AlertCircle, ArrowLeft } from 'lucide-react';
 import '../styles/auth.css';
 
 function Login() {
@@ -34,7 +34,7 @@ function Login() {
 
     try {
       setLoading(true);
-      
+
       const response = await axios.post(API_URL + '/auth/login', {
         email: email,
         password: password
@@ -48,11 +48,11 @@ function Login() {
       if (pendingInvitation) {
         try {
           const inviteResponse = await axios.post(
-            API_URL + '/teams/accept-invitation', 
+            API_URL + '/teams/accept-invitation',
             { token: pendingInvitation, userId: response.data.user.id },
             { headers: { Authorization: 'Bearer ' + response.data.token } }
           );
-          
+
           localStorage.removeItem('pendingInvitation');
           localStorage.removeItem('invitationEmail');
           alert(inviteResponse.data.message);
@@ -80,167 +80,140 @@ function Login() {
 
   return (
     <div className="auth-page">
-      <div className="auth-branding">
-        <div className="auth-branding-content">
-          <div className="auth-branding-logo">
-            <div className="auth-branding-logo-icon">C</div>
-            <span className="auth-branding-logo-text">
-              CampusTasks<span className="auth-branding-logo-dot">.</span>
-            </span>
-          </div>
-          
-          <h1 className="auth-branding-tagline">
-            Manage Tasks.<br />
-            <span>Ace Your Semester.</span>
-          </h1>
-          
-          <p className="auth-branding-description">
-            The modern task management platform built for students and teams. 
-            Organize assignments, track deadlines, and collaborate seamlessly.
-          </p>
-          
-          <div className="auth-branding-features">
-            <div className="auth-branding-feature">
-              <div className="auth-branding-feature-icon">
-                <CheckCircle size={22} />
-              </div>
-              <div className="auth-branding-feature-text">
-                <div className="auth-branding-feature-title">Smart Task Management</div>
-                <div className="auth-branding-feature-desc">Organize tasks with priorities and deadlines</div>
-              </div>
-            </div>
-            
-            <div className="auth-branding-feature">
-              <div className="auth-branding-feature-icon">
-                <Users size={22} />
-              </div>
-              <div className="auth-branding-feature-text">
-                <div className="auth-branding-feature-title">Team Collaboration</div>
-                <div className="auth-branding-feature-desc">Work together with classmates and groups</div>
-              </div>
-            </div>
-            
-            <div className="auth-branding-feature">
-              <div className="auth-branding-feature-icon">
-                <Calendar size={22} />
-              </div>
-              <div className="auth-branding-feature-text">
-                <div className="auth-branding-feature-title">Deadline Tracking</div>
-                <div className="auth-branding-feature-desc">Never miss an assignment deadline again</div>
-              </div>
-            </div>
+      <div className="auth-split-container">
+        {/* Left Side - Brand & Info */}
+        <div className="auth-left">
+          <div className="auth-left-content">
+            <h1>CampusTasks</h1>
+            <p style={{ marginBottom: '24px' }}>
+              Your all-in-one platform for managing academic projects,
+              coordinating with teams, and staying top of your assignments.
+            </p>
+
+            <ul style={{ listStyle: 'none', padding: 0, textAlign: 'left', display: 'inline-block' }}>
+              <li style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ background: 'rgba(17, 24, 39, 0.1)', padding: '5px', borderRadius: '50%' }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#111827" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg>
+                </div>
+                Manage Tasks & Deadlines
+              </li>
+              <li style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ background: 'rgba(17, 24, 39, 0.1)', padding: '5px', borderRadius: '50%' }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#111827" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg>
+                </div>
+                Collaborate with Teams
+              </li>
+              <li style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ background: 'rgba(17, 24, 39, 0.1)', padding: '5px', borderRadius: '50%' }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#111827" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg>
+                </div>
+                Track Progress Visualizations
+              </li>
+            </ul>
+
+            {/* Minimal SVG Illustration */}
+            <svg
+              viewBox="0 0 400 300"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              style={{ width: '100%', marginTop: '40px', opacity: 0.8 }}
+            >
+              <rect x="50" y="50" width="300" height="200" rx="20" fill="url(#paint0_linear)" fillOpacity="0.1" stroke="url(#paint0_linear)" strokeWidth="2" />
+              <circle cx="350" cy="50" r="20" fill="#000000" fillOpacity="0.1" />
+              <circle cx="50" cy="250" r="30" fill="#000000" fillOpacity="0.1" />
+              <path d="M100 120H300" stroke="rgba(0,0,0,0.2)" strokeWidth="10" strokeLinecap="round" />
+              <path d="M100 160H250" stroke="rgba(0,0,0,0.2)" strokeWidth="10" strokeLinecap="round" />
+              <path d="M100 200H200" stroke="rgba(0,0,0,0.2)" strokeWidth="10" strokeLinecap="round" />
+              <defs>
+                <linearGradient id="paint0_linear" x1="50" y1="50" x2="350" y2="250" gradientUnits="userSpaceOnUse">
+                  <stop stopColor="#94a3b8" />
+                  <stop offset="1" stopColor="#cbd5e1" />
+                </linearGradient>
+              </defs>
+            </svg>
           </div>
         </div>
-      </div>
 
-      <div className="auth-form-side">
-        <Link to="/" className="auth-back">
-          <ArrowLeft className="auth-back-icon" size={18} />
-          Back to Home
-        </Link>
-
-        <div className="auth-form-container">
-          <div className="auth-mobile-logo">
-            <div className="auth-mobile-logo-icon">C</div>
-            <span className="auth-mobile-logo-text">
-              CampusTasks<span className="auth-mobile-logo-dot">.</span>
-            </span>
-          </div>
-
-          <div className="auth-header">
-            <h1 className="auth-title">Welcome back</h1>
-            {localStorage.getItem('pendingInvitation') ? (
-              <p className="auth-subtitle" style={{ color: '#6366f1' }}>
-                Sign in to accept the team invitation
+        {/* Right Side - Login Form */}
+        <div className="auth-right">
+          <div className="auth-form-wrapper">
+            <div className="auth-header">
+              <Link to="/" className="auth-logo">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                  <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                </svg>
+              </Link>
+              <h1 className="auth-title">Welcome back</h1>
+              <p className="auth-subtitle">
+                {localStorage.getItem('pendingInvitation')
+                  ? 'Sign in to accept your invitation'
+                  : 'Sign in to access your workspace'}
               </p>
-            ) : (
-              <p className="auth-subtitle">Sign in to your account to continue</p>
-            )}
-          </div>
-
-          <div className="auth-social">
-            <button className="auth-social-btn" onClick={handleGoogleLogin} type="button">
-              <img 
-                src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" 
-                alt="Google" 
-                className="auth-social-icon"
-              />
-              Continue with Google
-            </button>
-          </div>
-
-          <div className="auth-divider">
-            <span className="auth-divider-line"></span>
-            <span className="auth-divider-text">or</span>
-            <span className="auth-divider-line"></span>
-          </div>
-
-          <form onSubmit={handleSubmit} className="auth-form">
-            {error && (
-              <div className="auth-message auth-message-error">
-                <AlertCircle className="auth-message-icon" size={18} />
-                <span>{error}</span>
-              </div>
-            )}
-
-            <div className="auth-field">
-              <label className="auth-label">Email</label>
-              <div className="auth-input-icon-wrapper">
-                <Mail className="auth-input-icon" size={18} />
-                <input
-                  type="email"
-                  className="auth-input"
-                  placeholder="Enter your email"
-                  value={email}
-                  onChange={(e) => { setEmail(e.target.value); setError(''); }}
-                  disabled={loading}
-                  autoComplete="email"
-                />
-              </div>
             </div>
 
-            <div className="auth-field">
-              <label className="auth-label">Password</label>
-              <div className="auth-input-icon-wrapper auth-password-wrapper">
-                <Lock className="auth-input-icon" size={18} />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  className="auth-input"
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => { setPassword(e.target.value); setError(''); }}
-                  disabled={loading}
-                  autoComplete="current-password"
-                  style={{ paddingRight: '48px' }}
-                />
-                <button
-                  type="button"
-                  className="auth-password-toggle"
-                  onClick={() => setShowPassword(!showPassword)}
-                  tabIndex={-1}
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
+            <form onSubmit={handleSubmit} className="auth-form">
+              {error && (
+                <div className="auth-alert auth-alert-error">
+                  <AlertCircle size={16} />
+                  {error}
+                </div>
+              )}
+
+              <div className="form-group">
+                <label>Email</label>
+                <div className="input-wrapper">
+                  <input
+                    type="email"
+                    className="auth-input"
+                    placeholder="Enter your email"
+                    value={email}
+                    onChange={(e) => { setEmail(e.target.value); setError(''); }}
+                    disabled={loading}
+                  />
+                  <Mail className="input-icon" size={18} />
+                </div>
               </div>
+
+              <div className="form-group">
+                <label>Password</label>
+                <div className="input-wrapper has-right-action">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    className="auth-input"
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => { setPassword(e.target.value); setError(''); }}
+                    disabled={loading}
+                  />
+                  <Lock className="input-icon" size={18} />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                <Link to="/forgot-password" className="forgot-password-link">Forgot password?</Link>
+              </div>
+
+              <button type="submit" className="auth-btn" disabled={loading}>
+                {loading ? 'Signing in...' : 'Sign In'}
+              </button>
+            </form>
+
+            <div className="auth-footer">
+              Don't have an account?
+              <Link to="/signup" className="auth-link">Create one</Link>
             </div>
 
-            <Link to="/forgot-password" className="auth-forgot-link">
-              Forgot password?
-            </Link>
-
-            <button 
-              type="submit" 
-              className={'auth-btn auth-btn-primary auth-btn-full' + (loading ? ' auth-btn-loading' : '')}
-              disabled={loading}
-            >
-              {loading ? '' : 'Sign In'}
-            </button>
-          </form>
-
-          <p className="auth-footer">
-            Do not have an account?{' '}
-            <Link to="/signup" className="auth-footer-link">Create one</Link>
-          </p>
+            <div className="auth-back-row">
+              <Link to="/" className="auth-secondary-link">
+                <ArrowLeft size={14} /> Back to Home
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
     </div>

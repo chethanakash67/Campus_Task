@@ -1,34 +1,29 @@
 /* Leaderboard.css - Refined leaderboard layout */
 
 .page-header-card.leaderboard-header {
-  background: linear-gradient(135deg, #0f172a, #1f2937);
-  border: none;
-  color: #f8fafc;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  color: #111827;
   position: relative;
   overflow: hidden;
 }
 
+/* Removed decorative background */
 .page-header-card.leaderboard-header::after {
-  content: '';
-  position: absolute;
-  right: -80px;
-  top: -80px;
-  width: 220px;
-  height: 220px;
-  background: radial-gradient(circle, rgba(56, 189, 248, 0.35), transparent 65%);
+  display: none;
 }
 
 .page-header-card.leaderboard-header .page-header-content h1 {
-  color: #f8fafc;
+  color: #111827;
 }
 
 .page-header-card.leaderboard-header .page-header-content p {
-  color: #cbd5f5;
+  color: #6b7280;
 }
 
 .page-header-card.leaderboard-header .page-header-icon {
-  background: linear-gradient(135deg, #38bdf8, #6366f1);
-  color: #0b1020;
+  background: #f3f4f6;
+  color: #111827;
 }
 
 .leaderboard-hero {
@@ -53,7 +48,7 @@
   width: 56px;
   height: 56px;
   border-radius: 14px;
-  background: linear-gradient(135deg, #38bdf8, #6366f1);
+  background: #000000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -141,18 +136,18 @@
 
 .podium-card.rank-1 {
   transform: translateY(-6px);
-  border-color: #f59e0b;
-  background: linear-gradient(180deg, #fff7ed, #ffffff);
+  border-color: #000000;
+  background: #ffffff;
 }
 
 .podium-card.rank-2 {
-  border-color: #94a3b8;
-  background: linear-gradient(180deg, #f8fafc, #ffffff);
+  border-color: #9ca3af;
+  background: #ffffff;
 }
 
 .podium-card.rank-3 {
-  border-color: #f97316;
-  background: linear-gradient(180deg, #fff7ed, #ffffff);
+  border-color: #d1d5db;
+  background: #ffffff;
 }
 
 .podium-rank {
@@ -175,8 +170,8 @@
   width: 56px;
   height: 56px;
   border-radius: 16px;
-  background: linear-gradient(135deg, #38bdf8, #6366f1);
-  color: #ffffff;
+  background: #f3f4f6;
+  color: #111827;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -252,7 +247,7 @@
 }
 
 .rank-icon.bronze {
-  color: #f97316;
+  color: #d1d5db;
 }
 
 .leaderboard-avatar {
@@ -313,7 +308,7 @@
 }
 
 .stat-value.points {
-  color: #2563eb;
+  color: #000000;
 }
 
 .empty-leaderboard {

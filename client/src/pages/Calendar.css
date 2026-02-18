@@ -35,7 +35,7 @@
 }
 
 .quick-stat.overdue {
-  color: #ef4444;
+  color: #111827;
 }
 
 /* Calendar Layout */
@@ -93,11 +93,11 @@
 }
 
 .calendar-day.today {
-  background: #eff6ff;
+  background: #f3f4f6;
 }
 
 .calendar-day.today .day-number {
-  background: #0ea5e9;
+  background: #000000;
   color: white;
 }
 
@@ -136,21 +136,21 @@
 }
 
 .event-badge.event-high {
-  background: #fee2e2;
-  color: #dc2626;
-  border-left: 3px solid #ef4444;
+  background: #f3f4f6;
+  color: #111827;
+  border-left: 3px solid #000000;
 }
 
 .event-badge.event-medium {
-  background: #fef3c7;
-  color: #d97706;
-  border-left: 3px solid #f59e0b;
+  background: #e5e7eb;
+  color: #111827;
+  border-left: 3px solid #6b7280;
 }
 
 .event-badge.event-low {
-  background: #d1fae5;
-  color: #059669;
-  border-left: 3px solid #10b981;
+  background: #f9fafb;
+  color: #374151;
+  border-left: 3px solid #9ca3af;
 }
 
 .more-tasks {
@@ -187,7 +187,7 @@
 }
 
 .sidebar-card-header svg {
-  color: #0ea5e9;
+  color: #000000;
   font-size: 18px;
 }
 
@@ -220,15 +220,15 @@
 }
 
 .month-stat-item .stat-number.completed {
-  color: #10b981;
+  color: #111827;
 }
 
 .month-stat-item .stat-number.upcoming {
-  color: #0ea5e9;
+  color: #111827;
 }
 
 .month-stat-item .stat-number.overdue {
-  color: #ef4444;
+  color: #111827;
 }
 
 .month-stat-item .stat-text {
@@ -299,15 +299,15 @@
 }
 
 .priority-indicator.high {
-  background: #ef4444;
+  background: #111827;
 }
 
 .priority-indicator.medium {
-  background: #f59e0b;
+  background: #6b7280;
 }
 
 .priority-indicator.low {
-  background: #10b981;
+  background: #e5e7eb;
 }
 
 .upcoming-task-info {
@@ -341,8 +341,8 @@
 }
 
 .days-badge.urgent {
-  background: #fee2e2;
-  color: #dc2626;
+  background: #111827;
+  color: #ffffff;
 }
 
 /* Responsive */
@@ -350,13 +350,13 @@
   .calendar-layout {
     flex-direction: column;
   }
-  
+
   .calendar-sidebar-panel {
     width: 100%;
     flex-direction: row;
     gap: 16px;
   }
-  
+
   .sidebar-card {
     flex: 1;
   }
@@ -369,31 +369,31 @@
     gap: 8px;
     padding: 0 16px;
   }
-  
+
   .calendar-layout {
     padding: 0 16px 16px;
   }
-  
+
   .calendar-sidebar-panel {
     flex-direction: column;
   }
-  
+
   .calendar-day {
     min-height: 70px;
     padding: 4px;
   }
-  
+
   .day-number {
     width: 24px;
     height: 24px;
     font-size: 11px;
   }
-  
+
   .event-badge {
     font-size: 9px;
     padding: 2px 4px;
   }
-  
+
   .month-stats-grid {
     grid-template-columns: repeat(4, 1fr);
   }
@@ -403,20 +403,20 @@
   .calendar-grid {
     font-size: 10px;
   }
-  
+
   .day-header {
     padding: 8px 4px;
     font-size: 10px;
   }
-  
+
   .calendar-day {
     min-height: 50px;
   }
-  
+
   .day-tasks {
     display: none;
   }
-  
+
   .month-stats-grid {
     grid-template-columns: 1fr 1fr;
   }

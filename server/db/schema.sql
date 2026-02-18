@@ -6,7 +6,9 @@ CREATE TABLE IF NOT EXISTS users (
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
-    avatar VARCHAR(10),
+    avatar TEXT,
+    bio TEXT,
+    points INTEGER DEFAULT 0,
     is_verified BOOLEAN DEFAULT FALSE,
     google_id VARCHAR(255) UNIQUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -16,6 +18,9 @@ CREATE TABLE IF NOT EXISTS users (
 -- Safely add columns if they are missing (for existing databases)
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(255) UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS points INTEGER DEFAULT 0;
+ALTER TABLE users ALTER COLUMN avatar TYPE TEXT;
 
 -- 2. OTP Verification Table
 CREATE TABLE IF NOT EXISTS otp_verifications (
@@ -216,3 +221,25 @@ CREATE TABLE IF NOT EXISTS notifications (
 
 CREATE INDEX idx_notifications_user_id ON notifications(user_id);
 CREATE INDEX idx_notifications_is_read ON notifications(is_read);
+
+-- Deadline reminder dedupe tracking
+CREATE TABLE IF NOT EXISTS task_deadline_reminders (
+    id SERIAL PRIMARY KEY,
+    task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    days_before INTEGER NOT NULL,
+    sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(task_id, user_id, days_before)
+);
+
+-- Points award dedupe tracking for leaderboard
+CREATE TABLE IF NOT EXISTS task_point_awards (
+    id SERIAL PRIMARY KEY,
+    task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    award_type VARCHAR(50) NOT NULL,
+    points INTEGER NOT NULL,
+    awarded_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    awarded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(task_id, user_id, award_type)
+);

@@ -28,12 +28,15 @@
 .page-header-icon {
   width: 56px;
   height: 56px;
-  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+  width: 56px;
+  height: 56px;
+  background: #f3f4f6;
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  justify-content: center;
+  color: #111827;
   font-size: 28px;
 }
 
@@ -86,8 +89,8 @@
 
 .search-input:focus {
   outline: none;
-  border-color: #0ea5e9;
-  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+  border-color: #000000;
+  box-shadow: 0 0 0 1px #000000;
 }
 
 .search-input::placeholder {
@@ -147,8 +150,8 @@
 }
 
 .team-list-item:hover {
-  border-color: #0ea5e9;
-  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.1);
+  border-color: #000000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
 .team-item-main {
@@ -173,16 +176,18 @@
   align-items: center;
   justify-content: center;
   font-size: 24px;
-  color: white;
+  color: #111827;
   flex-shrink: 0;
 }
 
-.team-avatar.purple { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
-.team-avatar.green { background: linear-gradient(135deg, #10b981, #059669); }
-.team-avatar.blue { background: linear-gradient(135deg, #0ea5e9, #0284c7); }
-.team-avatar.red { background: linear-gradient(135deg, #ef4444, #dc2626); }
-.team-avatar.yellow { background: linear-gradient(135deg, #f59e0b, #d97706); }
-.team-avatar.pink { background: linear-gradient(135deg, #ec4899, #db2777); }
+.team-avatar.purple,
+.team-avatar.green,
+.team-avatar.blue,
+.team-avatar.red,
+.team-avatar.yellow,
+.team-avatar.pink {
+  background: #f3f4f6;
+}
 
 .team-item-info {
   flex: 1;
@@ -238,15 +243,15 @@
 }
 
 .meta-item.visibility.public {
-  background: #ecfeff;
-  color: #0ea5e9;
-  border: 1px solid #bae6fd;
+  background: #f3f4f6;
+  color: #1f2937;
+  border: 1px solid #e5e7eb;
 }
 
 .meta-item.visibility.private {
-  background: #fff7ed;
-  color: #c2410c;
-  border: 1px solid #fed7aa;
+  background: #f9fafb;
+  color: #374151;
+  border: 1px solid #e5e7eb;
 }
 
 .team-item-right {
@@ -265,8 +270,8 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #0ea5e9, #0284c7);
-  color: white;
+  background: #f3f4f6;
+  color: #1f2937;
   font-size: 11px;
   font-weight: 600;
   display: flex;
@@ -310,8 +315,8 @@
 }
 
 .btn.btn-icon:hover {
-  background: #0ea5e9;
-  border-color: #0ea5e9;
+  background: #000000;
+  border-color: #000000;
   color: white;
 }
 
@@ -339,7 +344,7 @@
 
 .progress-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, #10b981, #059669);
+  background: #000000;
   border-radius: 3px;
   transition: width 0.3s ease;
 }
@@ -404,9 +409,17 @@
   flex-shrink: 0;
 }
 
-.priority-dot.high { background: #ef4444; }
-.priority-dot.medium { background: #f59e0b; }
-.priority-dot.low { background: #10b981; }
+.priority-dot.high {
+  background: #000000;
+}
+
+.priority-dot.medium {
+  background: #666666;
+}
+
+.priority-dot.low {
+  background: #d1d5db;
+}
 
 .task-title-compact {
   flex: 1;
@@ -426,18 +439,18 @@
 }
 
 .status-badge.todo {
-  background: #e0e7ff;
-  color: #4338ca;
+  background: #e5e7eb;
+  color: #374151;
 }
 
 .status-badge.in-progress {
-  background: #fef3c7;
-  color: #d97706;
+  background: #f3f4f6;
+  color: #000000;
 }
 
 .status-badge.done {
-  background: #d1fae5;
-  color: #059669;
+  background: #111827;
+  color: #ffffff;
 }
 
 /* Secondary Button */
@@ -515,8 +528,8 @@
 }
 
 .join-requests-count {
-  background: #e0f2fe;
-  color: #0284c7;
+  background: #f3f4f6;
+  color: #1f2937;
   border-radius: 999px;
   padding: 2px 8px;
   font-size: 11px;
@@ -587,9 +600,9 @@
 }
 
 .visibility-option.active {
-  background: #0ea5e9;
+  background: #1f2937;
   color: #ffffff;
-  border-color: #0ea5e9;
+  border-color: #1f2937;
 }
 
 .visibility-help {
@@ -622,8 +635,8 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #0ea5e9, #0284c7);
-  color: white;
+  background: #f3f4f6;
+  color: #1f2937;
   font-size: 12px;
   font-weight: 600;
   display: flex;
@@ -681,13 +694,13 @@
 .add-member-form input:focus,
 .add-member-form select:focus {
   outline: none;
-  border-color: #0ea5e9;
-  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+  border-color: #000000;
+  box-shadow: 0 0 0 1px #000000;
 }
 
 .add-member-form .btn-add {
   padding: 10px 16px;
-  background: #0ea5e9;
+  background: #000000;
   color: white;
   border: none;
   border-radius: 8px;
@@ -698,7 +711,7 @@
 }
 
 .add-member-form .btn-add:hover {
-  background: #0284c7;
+  background: #333333;
 }
 
 /* Responsive */
@@ -708,16 +721,16 @@
     align-items: flex-start;
     gap: 16px;
   }
-  
+
   .team-item-right {
     width: 100%;
     justify-content: space-between;
   }
-  
+
   .team-progress-section {
     padding-left: 24px;
   }
-  
+
   .add-member-form {
     grid-template-columns: 1fr 1fr;
   }
@@ -731,33 +744,33 @@
     padding: 20px;
     margin: 16px;
   }
-  
+
   .page-header-content {
     flex-direction: column;
   }
-  
+
   .teams-filter-section {
     flex-direction: column;
     gap: 12px;
     padding: 0 16px;
   }
-  
+
   .search-input-wrapper {
     width: 100%;
   }
-  
+
   .teams-list {
     padding: 0 16px 16px;
   }
-  
+
   .team-item-main {
     padding: 16px;
   }
-  
+
   .team-item-desc {
     max-width: 100%;
   }
-  
+
   .team-item-meta {
     flex-wrap: wrap;
     gap: 8px;
@@ -771,11 +784,11 @@
   .page-header-actions .btn {
     width: 100%;
   }
-  
+
   .team-members-avatars {
     display: none;
   }
-  
+
   .add-member-form {
     grid-template-columns: 1fr;
   }

@@ -6,7 +6,8 @@
   position: relative;
   background: none;
   border: none;
-  color: #e0e0e0;
+  color: #6b7280;
+  /* Darker gray for better visibility */
   font-size: 1.3rem;
   cursor: pointer;
   padding: 8px;
@@ -38,8 +39,15 @@
 }
 
 @keyframes pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
+
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.05);
+  }
 }
 
 .notification-dropdown {
@@ -63,6 +71,7 @@
     opacity: 0;
     transform: translateY(-10px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);

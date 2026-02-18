@@ -82,7 +82,10 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #e5e7eb;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -101,7 +104,7 @@
 }
 
 .status-dot.online {
-  background-color: #00ff88;
+  background-color: #000000;
 }
 
 .status-dot.offline {
@@ -158,8 +161,9 @@
   margin-top: 8px;
   text-align: left;
   border: none;
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  border: none;
+  background: #f3f4f6;
+  color: #111827;
   border-radius: 6px;
   padding: 8px 10px;
   font-size: 0.8rem;
@@ -221,18 +225,18 @@
 }
 
 .header-action-btn:hover {
-  border-color: #646cff;
-  color: #646cff;
+  border-color: #000000;
+  color: #000000;
 }
 
 .header-action-btn.meet {
-  background: #646cff;
-  border-color: #646cff;
+  background: #000000;
+  border-color: #000000;
   color: #fff;
 }
 
 .header-action-btn.meet:hover {
-  background: #535bf2;
+  background: #333333;
 }
 
 .chat-search-wrap {
@@ -287,7 +291,10 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #e5e7eb;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -326,7 +333,10 @@
   padding: 6px 10px;
   background: #f0f0f0;
   border-radius: 8px;
-  border-left: 3px solid #646cff;
+  padding: 6px 10px;
+  background: #f0f0f0;
+  border-radius: 8px;
+  border-left: 3px solid #666666;
 }
 
 .reply-text {
@@ -347,7 +357,7 @@
 }
 
 .own-message .message-bubble {
-  background-color: #646cff;
+  background-color: #000000;
   color: white;
 }
 
@@ -367,14 +377,16 @@
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: #f0f0f0;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #f3f4f6;
   border-radius: 8px;
   font-size: 0.85rem;
   margin-bottom: 6px;
 }
 
 .attachment-item svg {
-  color: #646cff;
+  color: #000000;
 }
 
 .message-reactions {
@@ -439,7 +451,7 @@
 }
 
 .message-actions svg:hover {
-  color: #646cff;
+  color: #000000;
 }
 
 .bookmark-icon {
@@ -448,11 +460,11 @@
 }
 
 .bookmark-icon.active {
-  color: #f59e0b;
+  color: #000000;
 }
 
 .message-highlight .message-bubble {
-  box-shadow: 0 0 0 2px #f59e0b;
+  box-shadow: 0 0 0 2px #000000;
 }
 
 .typing-indicator {
@@ -473,7 +485,9 @@
 .typing-dots span {
   width: 6px;
   height: 6px;
-  background-color: #646cff;
+  width: 6px;
+  height: 6px;
+  background-color: #000000;
   border-radius: 50%;
   animation: typing 1.4s infinite ease-in-out;
 }
@@ -487,10 +501,14 @@
 }
 
 @keyframes typing {
-  0%, 60%, 100% {
+
+  0%,
+  60%,
+  100% {
     transform: translateY(0);
     opacity: 0.7;
   }
+
   30% {
     transform: translateY(-10px);
     opacity: 1;
@@ -568,7 +586,7 @@
 }
 
 .control-btn:hover {
-  color: #646cff;
+  color: #000000;
 }
 
 .message-input {
@@ -576,7 +594,7 @@
   padding: 14px 20px;
   border-radius: 24px;
   border: 1px solid #e0e0e0;
- /* ... continued from your previous file ... */
+  /* ... continued from your previous file ... */
 
   font-size: 0.95rem;
   transition: border-color 0.2s, box-shadow 0.2s;
@@ -584,12 +602,12 @@
 }
 
 .message-input:focus {
-  border-color: #646cff;
-  box-shadow: 0 0 0 3px rgba(100, 108, 255, 0.1);
+  border-color: #000000;
+  box-shadow: 0 0 0 1px #000000;
 }
 
 .send-button {
-  background-color: #646cff;
+  background-color: #000000;
   color: white;
   border: none;
   padding: 12px 24px;
@@ -606,9 +624,9 @@
 }
 
 .send-button:hover:not(:disabled) {
-  background-color: #535bf2;
+  background-color: #333333;
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(100, 108, 255, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .send-button:disabled {
@@ -662,7 +680,7 @@
     bottom: 0;
     z-index: 100;
     transition: left 0.3s ease;
-    box-shadow: 2px 0 10px rgba(0,0,0,0.2);
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.2);
   }
 
   /* Optional: Add a class via JS to toggle this if you add a menu button later */
@@ -679,7 +697,7 @@
   .chat-header {
     padding: 15px;
   }
-  
+
   .chat-header h1 {
     font-size: 1.2rem;
   }
@@ -707,9 +725,10 @@
   }
 
   .send-button span {
-    display: none; /* Hide text "Send" on very small screens, keep icon */
+    display: none;
+    /* Hide text "Send" on very small screens, keep icon */
   }
-  
+
   .send-button svg {
     margin: 0;
   }
@@ -721,12 +740,13 @@
 }
 
 /* Invite Button in Sidebar */
+/* Invite Button in Sidebar */
 .invite-member-btn {
   width: 100%;
   padding: 10px;
-  background: rgba(100, 108, 255, 0.1);
-  border: 1px dashed rgba(100, 108, 255, 0.4);
-  color: var(--accent-color);
+  background: #f3f4f6;
+  border: 1px dashed #d1d5db;
+  color: #111827;
   border-radius: 8px;
   cursor: pointer;
   margin-top: 10px;
@@ -740,7 +760,7 @@
 }
 
 .invite-member-btn:hover {
-  background: rgba(100, 108, 255, 0.2);
-  border-color: var(--accent-color);
+  background: #e5e7eb;
+  border-color: #9ca3af;
   transform: translateY(-1px);
 }

@@ -88,6 +88,7 @@ export const AppProvider = ({ children }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
       setCurrentUser(response.data);
+      localStorage.setItem('campusUser', JSON.stringify(response.data));
       
       // Fetch teams and tasks in parallel
       await Promise.all([fetchTeams(token), fetchTasks(token)]);
@@ -123,7 +124,7 @@ export const AppProvider = ({ children }) => {
         await fetchTeams(token);
         addToast('Joined team successfully!', 'success');
       } else if (response.data.status === 'pending') {
-        addToast('Join request sent to team leader', 'info');
+        addToast('Join request sent to team owner', 'info');
       } else if (response.data.status === 'already_member') {
         addToast('You are already in this team', 'info');
       }
@@ -204,6 +205,23 @@ export const AppProvider = ({ children }) => {
     fetchUserData(token).catch(err => {
       console.error('Background fetch error on login:', err);
     });
+  };
+
+  const updateCurrentUserProfile = async (profileData) => {
+    try {
+      const token = localStorage.getItem('campusToken');
+      const response = await axios.put(`${API_URL}/auth/me`, profileData, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setCurrentUser(response.data);
+      localStorage.setItem('campusUser', JSON.stringify(response.data));
+      addToast('Profile updated successfully!', 'success');
+      return response.data;
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      addToast(error.response?.data?.error || 'Failed to update profile', 'error');
+      throw error;
+    }
   };
 
   // Logout function
@@ -304,10 +322,10 @@ export const AppProvider = ({ children }) => {
   const addTeam = async (teamData) => {
     try {
       const token = localStorage.getItem('campusToken');
-      const response = await axios.post(`${API_URL}/teams`, teamData, {
+      await axios.post(`${API_URL}/teams`, teamData, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setTeams([...teams, response.data]);
+      await fetchTeams(token);
       addToast('Team created successfully!', 'success');
     } catch (error) {
       console.error('Error adding team:', error);
@@ -410,7 +428,8 @@ const updateTeam = async (teamId, teamData) => {
     fetchJoinRequests,
     approveJoinRequest,
     rejectJoinRequest,
-    joinRequests
+    joinRequests,
+    updateCurrentUserProfile
   };
 
   if (loading) {

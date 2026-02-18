@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Mail, AlertCircle, ArrowLeft, CheckCircle, Users, Calendar } from 'lucide-react';
+import { Mail, AlertCircle, CheckCircle } from 'lucide-react';
 import '../styles/auth.css';
 
 function ForgotPassword() {
@@ -25,12 +25,12 @@ function ForgotPassword() {
 
     try {
       setLoading(true);
-      
+
       await axios.post(API_URL + '/auth/forgot-password', { email: email });
-      
+
       setSuccess('Password reset link sent! Check your email.');
       localStorage.setItem('resetEmail', email);
-      
+
       setTimeout(() => {
         navigate('/reset-password', { state: { email: email } });
       }, 2000);
@@ -44,124 +44,62 @@ function ForgotPassword() {
 
   return (
     <div className="auth-page">
-      <div className="auth-branding">
-        <div className="auth-branding-content">
-          <div className="auth-branding-logo">
-            <div className="auth-branding-logo-icon">C</div>
-            <span className="auth-branding-logo-text">
-              CampusTasks<span className="auth-branding-logo-dot">.</span>
-            </span>
-          </div>
-          
-          <h1 className="auth-branding-tagline">
-            Manage Tasks.<br />
-            <span>Ace Your Semester.</span>
-          </h1>
-          
-          <p className="auth-branding-description">
-            The modern task management platform built for students and teams. 
-            Organize assignments, track deadlines, and collaborate seamlessly.
+      <div className="auth-card">
+        <div className="auth-header">
+          <Link to="/" className="auth-logo">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+          </Link>
+          <h1 className="auth-title">Forgot password?</h1>
+          <p className="auth-subtitle">
+            No worries, we will send you reset instructions.
           </p>
-          
-          <div className="auth-branding-features">
-            <div className="auth-branding-feature">
-              <div className="auth-branding-feature-icon">
-                <CheckCircle size={22} />
-              </div>
-              <div className="auth-branding-feature-text">
-                <div className="auth-branding-feature-title">Smart Task Management</div>
-                <div className="auth-branding-feature-desc">Organize tasks with priorities and deadlines</div>
-              </div>
-            </div>
-            
-            <div className="auth-branding-feature">
-              <div className="auth-branding-feature-icon">
-                <Users size={22} />
-              </div>
-              <div className="auth-branding-feature-text">
-                <div className="auth-branding-feature-title">Team Collaboration</div>
-                <div className="auth-branding-feature-desc">Work together with classmates and groups</div>
-              </div>
-            </div>
-            
-            <div className="auth-branding-feature">
-              <div className="auth-branding-feature-icon">
-                <Calendar size={22} />
-              </div>
-              <div className="auth-branding-feature-text">
-                <div className="auth-branding-feature-title">Deadline Tracking</div>
-                <div className="auth-branding-feature-desc">Never miss an assignment deadline again</div>
-              </div>
-            </div>
-          </div>
         </div>
-      </div>
 
-      <div className="auth-form-side">
-        <Link to="/login" className="auth-back">
-          <ArrowLeft className="auth-back-icon" size={18} />
-          Back to Sign In
-        </Link>
-
-        <div className="auth-form-container">
-          <div className="auth-mobile-logo">
-            <div className="auth-mobile-logo-icon">C</div>
-            <span className="auth-mobile-logo-text">
-              CampusTasks<span className="auth-mobile-logo-dot">.</span>
-            </span>
-          </div>
-
-          <div className="auth-header">
-            <h1 className="auth-title">Forgot password?</h1>
-            <p className="auth-subtitle">
-              No worries, we will send you reset instructions.
-            </p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="auth-form">
-            {error && (
-              <div className="auth-message auth-message-error">
-                <AlertCircle className="auth-message-icon" size={18} />
-                <span>{error}</span>
-              </div>
-            )}
-
-            {success && (
-              <div className="auth-message auth-message-success">
-                <CheckCircle className="auth-message-icon" size={18} />
-                <span>{success}</span>
-              </div>
-            )}
-
-            <div className="auth-field">
-              <label className="auth-label">Email</label>
-              <div className="auth-input-icon-wrapper">
-                <Mail className="auth-input-icon" size={18} />
-                <input
-                  type="email"
-                  className="auth-input"
-                  placeholder="Enter your email"
-                  value={email}
-                  onChange={(e) => { setEmail(e.target.value); setError(''); }}
-                  disabled={loading}
-                  autoComplete="email"
-                />
-              </div>
+        <form onSubmit={handleSubmit} className="auth-form">
+          {error && (
+            <div className="auth-alert auth-alert-error">
+              <AlertCircle size={16} />
+              {error}
             </div>
+          )}
 
-            <button 
-              type="submit" 
-              className={'auth-btn auth-btn-primary auth-btn-full' + (loading ? ' auth-btn-loading' : '')}
-              disabled={loading}
-            >
-              {loading ? '' : 'Send Reset Link'}
-            </button>
-          </form>
+          {success && (
+            <div className="auth-alert auth-alert-success">
+              <CheckCircle size={16} />
+              {success}
+            </div>
+          )}
 
-          <p className="auth-footer">
-            Remember your password?{' '}
-            <Link to="/login" className="auth-footer-link">Sign in</Link>
+          <div className="form-group">
+            <label>Email</label>
+            <div className="input-wrapper">
+              <input
+                type="email"
+                className="auth-input"
+                placeholder="Enter your email"
+                value={email}
+                onChange={(e) => { setEmail(e.target.value); setError(''); }}
+                disabled={loading}
+              />
+              <Mail className="input-icon" size={18} />
+            </div>
+          </div>
+
+          <button type="submit" className="auth-btn" disabled={loading}>
+            {loading ? 'Sending...' : 'Send Reset Link'}
+          </button>
+        </form>
+
+        <div className="auth-back-row">
+          <p className="auth-meta-text">
+            Remember your password?
           </p>
+          <Link to="/login" className="auth-inline-action">
+            Sign in
+          </Link>
         </div>
       </div>
     </div>

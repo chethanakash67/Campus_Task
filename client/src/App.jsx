@@ -19,6 +19,7 @@ import Teams from './pages/Teams';
 import Calendar from './pages/Calendar';
 import Settings from './pages/Settings';
 import Leaderboard from './pages/Leaderboard';
+import Profile from './pages/Profile';
 
 function App() {
   return (
@@ -40,7 +41,9 @@ function App() {
           <Route path="/teams" element={<Teams />} />
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/notifications" element={<Settings />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
+          <Route path="/profile" element={<Profile />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>

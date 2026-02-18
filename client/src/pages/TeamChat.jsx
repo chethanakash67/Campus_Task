@@ -339,6 +339,8 @@ function TeamChat() {
     const isCurrentUser = msg.user_id === currentUser?.id;
     const showAvatar = idx === 0 || messages[idx - 1].user_id !== msg.user_id;
     const replyToMsg = msg.replyTo ? messages.find(m => m.id === msg.replyTo) : null;
+    const hasImageAvatar = typeof msg.avatar === 'string' &&
+      (msg.avatar.startsWith('data:image/') || msg.avatar.startsWith('http://') || msg.avatar.startsWith('https://'));
 
     return (
       <div
@@ -348,7 +350,11 @@ function TeamChat() {
       >
         {!isCurrentUser && showAvatar && (
           <div className="message-avatar">
-            {msg.avatar || msg.user_name?.substring(0, 2).toUpperCase()}
+            {hasImageAvatar ? (
+              <img src={msg.avatar} alt={msg.user_name} className="avatar-image" />
+            ) : (
+              msg.avatar || msg.user_name?.substring(0, 2).toUpperCase()
+            )}
           </div>
         )}
 

@@ -6,7 +6,7 @@ import TaskDetailDrawer from '../components/TaskDetailDrawer';
 import { useApp } from '../context/AppContext';
 import axios from 'axios';
 import { 
-  FaSearch, FaSpinner, FaUsers, FaExclamationTriangle, 
+  FaSearch, FaSpinner, FaUsers, FaExclamationTriangle, FaEdit, FaTrash,
   FaCalendarAlt, FaFlag, FaArrowRight, FaCheck, FaHourglass 
 } from 'react-icons/fa';
 import { 
@@ -26,7 +26,12 @@ function AssignedTasks() {
   const [selectedTask, setSelectedTask] = useState(null);
   const [activeTab, setActiveTab] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState('newest');
+  const [focusMode, setFocusMode] = useState(false);
   const [draggedTask, setDraggedTask] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editTaskData, setEditTaskData] = useState(null);
+  const [editLoading, setEditLoading] = useState(false);
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
   useEffect(() => {
@@ -81,6 +86,17 @@ function AssignedTasks() {
 
   const isCompletedOnTime = (task) => task.status === 'done';
   const isCompletedLate = (task) => task.status === 'completed_late';
+  const isCompleted = (task) => task.status === 'done' || task.status === 'completed_late';
+
+  const isDueSoon = (task, days = 7) => {
+    if (!task.due_date || isCompleted(task)) return false;
+    const dueDate = new Date(task.due_date);
+    dueDate.setHours(23, 59, 59, 999);
+    const now = new Date();
+    const diffMs = dueDate - now;
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    return diffDays >= 0 && diffDays <= days;
+  };
   
   const isTaskPending = (task) => {
     if (task.status === 'done' || task.status === 'completed_late') return false;
@@ -97,6 +113,7 @@ function AssignedTasks() {
   const updateTaskStatus = async (taskId, newStatus) => {
     const task = allTasks.find(t => t.id === taskId);
     let effectiveStatus = newStatus;
+    const completionProgress = (newStatus === 'done') ? 100 : (task?.progress ?? 0);
     
     if (newStatus === 'done' && task?.due_date) {
       const dueDate = new Date(task.due_date);
@@ -107,10 +124,10 @@ function AssignedTasks() {
     }
     
     setAssignedToMeTasks(prev => prev.map(t => 
-      t.id === taskId ? { ...t, status: effectiveStatus } : t
+      t.id === taskId ? { ...t, status: effectiveStatus, progress: completionProgress } : t
     ));
     setCreatedByMeTasks(prev => prev.map(t => 
-      t.id === taskId ? { ...t, status: effectiveStatus } : t
+      t.id === taskId ? { ...t, status: effectiveStatus, progress: completionProgress } : t
     ));
     
     try {
@@ -156,11 +173,69 @@ function AssignedTasks() {
 
   const handleDragEnd = () => setDraggedTask(null);
 
+  const openEditModal = (task) => {
+    setEditTaskData({
+      id: task.id,
+      title: task.title || '',
+      description: task.description || '',
+      priority: task.priority || 'Medium',
+      dueDate: task.due_date ? new Date(task.due_date).toISOString().split('T')[0] : ''
+    });
+    setShowEditModal(true);
+  };
+
+  const closeEditModal = () => {
+    setShowEditModal(false);
+    setEditTaskData(null);
+  };
+
+  const submitEditTask = async (e) => {
+    e.preventDefault();
+    if (!editTaskData?.title?.trim()) return;
+
+    try {
+      setEditLoading(true);
+      const token = localStorage.getItem('campusToken');
+      await axios.put(`${API_URL}/tasks/${editTaskData.id}`, {
+        title: editTaskData.title,
+        description: editTaskData.description,
+        priority: editTaskData.priority,
+        dueDate: editTaskData.dueDate || null
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      addToast('Task updated successfully', 'success');
+      closeEditModal();
+      await fetchAllTasks();
+    } catch (error) {
+      console.error('Error editing task:', error);
+      addToast(error.response?.data?.error || 'Failed to update task', 'error');
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const deleteTask = async (task) => {
+    if (!window.confirm(`Delete task "${task.title}"?`)) return;
+    try {
+      const token = localStorage.getItem('campusToken');
+      await axios.delete(`${API_URL}/tasks/${task.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      addToast('Task deleted successfully', 'success');
+      await fetchAllTasks();
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      addToast(error.response?.data?.error || 'Failed to delete task', 'error');
+    }
+  };
+
   const stats = useMemo(() => ({
     total: allTasks.length,
     assignedToMe: assignedToMeTasks.length,
     assignedByMe: createdByMeTasks.length,
     pending: allTasks.filter(t => isTaskPending(t)).length,
+    dueSoon: allTasks.filter(t => isDueSoon(t, 7)).length,
     completedOnTime: allTasks.filter(t => isCompletedOnTime(t)).length,
     completedLate: allTasks.filter(t => isCompletedLate(t)).length,
     overdue: allTasks.filter(t => isTaskOverdue(t)).length,
@@ -184,6 +259,9 @@ function AssignedTasks() {
       case 'pending':
         filtered = allTasks.filter(t => isTaskPending(t));
         break;
+      case 'due-soon':
+        filtered = allTasks.filter(t => isDueSoon(t, 7));
+        break;
       case 'completed':
         filtered = allTasks.filter(t => isCompletedOnTime(t));
         break;
@@ -200,9 +278,36 @@ function AssignedTasks() {
         (task.description && task.description.toLowerCase().includes(searchQuery.toLowerCase()))
       );
     }
+
+    if (focusMode) {
+      filtered = filtered.filter(task => {
+        if (isCompleted(task)) return false;
+        const highPriority = task.priority?.toLowerCase() === 'high';
+        const urgentDue = isDueSoon(task, 2);
+        return highPriority || urgentDue;
+      });
+    }
+
+    const priorityScore = { high: 3, medium: 2, low: 1 };
+    const safeDueTime = (task) => task.due_date ? new Date(task.due_date).getTime() : Number.MAX_SAFE_INTEGER;
+    const safeUpdatedTime = (task) => task.updated_at ? new Date(task.updated_at).getTime() : 0;
+
+    if (sortBy === 'due-date') {
+      filtered = [...filtered].sort((a, b) => safeDueTime(a) - safeDueTime(b));
+    } else if (sortBy === 'priority') {
+      filtered = [...filtered].sort((a, b) => {
+        const pa = priorityScore[a.priority?.toLowerCase()] || 0;
+        const pb = priorityScore[b.priority?.toLowerCase()] || 0;
+        return pb - pa;
+      });
+    } else if (sortBy === 'oldest') {
+      filtered = [...filtered].sort((a, b) => safeUpdatedTime(a) - safeUpdatedTime(b));
+    } else {
+      filtered = [...filtered].sort((a, b) => safeUpdatedTime(b) - safeUpdatedTime(a));
+    }
     
     return filtered;
-  }, [allTasks, assignedToMeTasks, createdByMeTasks, searchQuery, activeTab]);
+  }, [allTasks, assignedToMeTasks, createdByMeTasks, searchQuery, activeTab, sortBy, focusMode]);
 
   const getColumnTasks = (status) => {
     if (status === 'done') {
@@ -240,6 +345,13 @@ function AssignedTasks() {
           subtitle: 'Tasks successfully completed on time',
           icon: <MdDone />,
           emptyMessage: 'No completed tasks yet'
+        };
+      case 'due-soon':
+        return {
+          title: 'Due Soon',
+          subtitle: 'Tasks due in the next 7 days',
+          icon: <MdSchedule />,
+          emptyMessage: 'No upcoming due tasks in the next 7 days'
         };
       case 'overdue':
         return {
@@ -304,6 +416,13 @@ function AssignedTasks() {
               Pending
               <span className="tab-count">{stats.pending}</span>
             </button>
+            <button
+              className={`tasks-tab ${activeTab === 'due-soon' ? 'active' : ''}`}
+              onClick={() => setActiveTab('due-soon')}
+            >
+              Due Soon
+              <span className="tab-count">{stats.dueSoon}</span>
+            </button>
             <button 
               className={`tasks-tab ${activeTab === 'completed' ? 'active' : ''}`}
               onClick={() => setActiveTab('completed')}
@@ -335,6 +454,24 @@ function AssignedTasks() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
+          <select
+            className="tasks-sort-select"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+          >
+            <option value="newest">Sort: Newest</option>
+            <option value="oldest">Sort: Oldest</option>
+            <option value="due-date">Sort: Due Date</option>
+            <option value="priority">Sort: Priority</option>
+          </select>
+          <button
+            type="button"
+            className={`focus-mode-btn ${focusMode ? 'active' : ''}`}
+            onClick={() => setFocusMode(prev => !prev)}
+            title="Show only high-priority or due-in-2-days tasks"
+          >
+            Focus Mode
+          </button>
         </div>
 
         {loading ? (
@@ -377,10 +514,13 @@ function AssignedTasks() {
                         <KanbanTaskCard 
                           key={task.id} 
                           task={task} 
+                          currentUser={currentUser}
                           onDragStart={handleDragStart}
                           onDragEnd={handleDragEnd}
                           onClick={() => setSelectedTask(task)}
                           onStatusChange={updateTaskStatus}
+                          onEdit={openEditModal}
+                          onDelete={deleteTask}
                         />
                       ))
                     )}
@@ -423,10 +563,66 @@ function AssignedTasks() {
                     onClick={() => setSelectedTask(task)}
                     onStatusChange={updateTaskStatus}
                     getSubmissionStatus={getSubmissionStatus}
+                    onEdit={openEditModal}
+                    onDelete={deleteTask}
                   />
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {showEditModal && editTaskData && (
+          <div className="modal-overlay">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h2>Edit Task</h2>
+                <button className="close-btn" onClick={closeEditModal}>×</button>
+              </div>
+              <form onSubmit={submitEditTask}>
+                <div className="form-group">
+                  <label>Title</label>
+                  <input
+                    type="text"
+                    value={editTaskData.title}
+                    onChange={(e) => setEditTaskData(prev => ({ ...prev, title: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Description</label>
+                  <textarea
+                    rows="3"
+                    value={editTaskData.description}
+                    onChange={(e) => setEditTaskData(prev => ({ ...prev, description: e.target.value }))}
+                  />
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Priority</label>
+                    <select
+                      value={editTaskData.priority}
+                      onChange={(e) => setEditTaskData(prev => ({ ...prev, priority: e.target.value }))}
+                    >
+                      <option value="Low">Low</option>
+                      <option value="Medium">Medium</option>
+                      <option value="High">High</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Due Date</label>
+                    <input
+                      type="date"
+                      value={editTaskData.dueDate}
+                      onChange={(e) => setEditTaskData(prev => ({ ...prev, dueDate: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <button type="submit" className="btn btn-full" disabled={editLoading}>
+                  {editLoading ? 'Saving...' : 'Save Changes'}
+                </button>
+              </form>
+            </div>
           </div>
         )}
 
@@ -445,10 +641,11 @@ function AssignedTasks() {
   );
 }
 
-function KanbanTaskCard({ task, onDragStart, onDragEnd, onClick, onStatusChange }) {
+function KanbanTaskCard({ task, currentUser, onDragStart, onDragEnd, onClick, onStatusChange, onEdit, onDelete }) {
   const isCompletedLate = task.status === 'completed_late';
   const isOverdue = !isCompletedLate && task.due_date && new Date(task.due_date) < new Date() && task.status !== 'done';
   const isCompleted = task.status === 'done' || isCompletedLate;
+  const canManage = task.created_by === currentUser?.id;
 
   return (
     <div 
@@ -521,12 +718,30 @@ function KanbanTaskCard({ task, onDragStart, onDragEnd, onClick, onStatusChange 
             {new Date(task.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
           </span>
         )}
+        {canManage && (
+          <div className="task-actions-inline" onClick={(e) => e.stopPropagation()}>
+            <button
+              className="action-btn edit"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEdit(task); }}
+              title="Edit task"
+            >
+              <FaEdit />
+            </button>
+            <button
+              className="action-btn delete"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(task); }}
+              title="Delete task"
+            >
+              <FaTrash />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function DetailedTaskCard({ task, currentUser, onClick, onStatusChange, getSubmissionStatus }) {
+function DetailedTaskCard({ task, currentUser, onClick, onStatusChange, getSubmissionStatus, onEdit, onDelete }) {
   const submissionStatus = getSubmissionStatus(task);
   const isCompleted = task.status === 'done' || task.status === 'completed_late';
   
@@ -629,6 +844,26 @@ function DetailedTaskCard({ task, currentUser, onClick, onStatusChange, getSubmi
             >
               <MdOutlineTaskAlt />
               <span>Complete</span>
+            </button>
+          </div>
+        )}
+        {isCreatedByMe && (
+          <div className="quick-actions" onClick={(e) => e.stopPropagation()}>
+            <button
+              className="action-btn edit"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEdit(task); }}
+              title="Edit task"
+            >
+              <FaEdit />
+              <span>Edit</span>
+            </button>
+            <button
+              className="action-btn delete"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(task); }}
+              title="Delete task"
+            >
+              <FaTrash />
+              <span>Delete</span>
             </button>
           </div>
         )}
