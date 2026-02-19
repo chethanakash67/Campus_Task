@@ -76,6 +76,31 @@ try {
   console.error('❌ Failed to initialize email transporter:', error.message);
 }
 
+// ==================== DEBUG ROUTES ====================
+app.get('/api/debug/email', async (req, res) => {
+  const configStatus = {
+    envUserSet: !!process.env.EMAIL_USER,
+    envPassSet: !!process.env.EMAIL_PASSWORD,
+    user: process.env.EMAIL_USER ? process.env.EMAIL_USER.replace(/(.{3})(.*)(@.*)/, '$1***$3') : 'Not Set',
+    transportCreated: !!transporter,
+    previousVerifyStatus: emailConfigured
+  };
+
+  if (transporter) {
+    try {
+      await transporter.verify();
+      configStatus.liveConnectionTest = 'Success';
+    } catch (error) {
+      configStatus.liveConnectionTest = 'Failed: ' + error.message;
+      configStatus.errorDetails = error;
+    }
+  } else {
+    configStatus.liveConnectionTest = 'Transporter not initialized (check env vars)';
+  }
+
+  res.json(configStatus);
+});
+
 // ==================== DATABASE CONNECTION ====================
 const isProduction = process.env.NODE_ENV === 'production';
 const connectionString = process.env.DATABASE_URL;
