@@ -18,6 +18,7 @@ import './Dashboard.css';
 import './AssignedTasks.css';
 
 function AssignedTasks() {
+  const POMODORO_SECONDS = 25 * 60;
   const navigate = useNavigate();
   const { toasts, removeToast, isAuthenticated, currentUser, addToast } = useApp();
   const [assignedToMeTasks, setAssignedToMeTasks] = useState([]);
@@ -28,6 +29,14 @@ function AssignedTasks() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('newest');
   const [focusMode, setFocusMode] = useState(false);
+  const [timerSeconds, setTimerSeconds] = useState(POMODORO_SECONDS);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [focusTaskId, setFocusTaskId] = useState('');
+  const [focusHistory, setFocusHistory] = useState({});
+  const [gamification, setGamification] = useState(null);
+  const [smartSchedule, setSmartSchedule] = useState([]);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [stalledTasks, setStalledTasks] = useState([]);
   const [draggedTask, setDraggedTask] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editTaskData, setEditTaskData] = useState(null);
@@ -39,8 +48,43 @@ function AssignedTasks() {
       navigate('/login');
       return;
     }
+    const storedHistory = localStorage.getItem(`focusHistory_${currentUser.id}`);
+    if (storedHistory) {
+      try {
+        setFocusHistory(JSON.parse(storedHistory));
+      } catch {
+        setFocusHistory({});
+      }
+    }
     fetchAllTasks();
   }, [isAuthenticated, currentUser, navigate]);
+
+  useEffect(() => {
+    if (!timerRunning) return undefined;
+    const interval = setInterval(() => {
+      setTimerSeconds(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setTimerRunning(false);
+          const today = new Date().toISOString().slice(0, 10);
+          setFocusHistory(prevHistory => {
+            const updated = {
+              ...prevHistory,
+              [today]: (prevHistory[today] || 0) + 1
+            };
+            if (currentUser?.id) {
+              localStorage.setItem(`focusHistory_${currentUser.id}`, JSON.stringify(updated));
+            }
+            return updated;
+          });
+          addToast('Focus session complete. Great work!', 'success');
+          return POMODORO_SECONDS;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [timerRunning, addToast, currentUser, POMODORO_SECONDS]);
 
   const fetchAllTasks = async () => {
     try {
@@ -55,10 +99,63 @@ function AssignedTasks() {
       ]);
       setAssignedToMeTasks(assignedRes.data);
       setCreatedByMeTasks(createdRes.data);
+      await fetchProductivityFeatures(token);
     } catch (error) {
       console.error('Error fetching tasks:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchProductivityFeatures = async (tokenArg) => {
+    try {
+      const token = tokenArg || localStorage.getItem('campusToken');
+      const [gamificationRes, scheduleRes, stalledRes] = await Promise.all([
+        axios.get(`${API_URL}/gamification/me`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        axios.get(`${API_URL}/tasks/schedule`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        axios.get(`${API_URL}/tasks/stalled`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+      ]);
+      setGamification(gamificationRes.data);
+      setSmartSchedule(scheduleRes.data || []);
+      setStalledTasks(stalledRes.data || []);
+    } catch (error) {
+      console.error('Error fetching productivity features:', error);
+    }
+  };
+
+  const generateSmartSchedule = async (persist = false) => {
+    try {
+      setScheduleLoading(true);
+      const token = localStorage.getItem('campusToken');
+      const endpoint = persist
+        ? `${API_URL}/tasks/smart-schedule/apply`
+        : `${API_URL}/tasks/smart-schedule/preview`;
+      const response = await axios.post(
+        endpoint,
+        { days: 7, dailyHours: 3 },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const scheduleData = persist ? response.data.schedule : response.data.schedule;
+      const flattened = (scheduleData || []).flatMap(day =>
+        (day.items || []).map(item => ({
+          ...item,
+          plan_date: day.date,
+          planned_hours: item.hours
+        }))
+      );
+      setSmartSchedule(flattened);
+      addToast(persist ? 'Smart schedule saved' : 'Smart schedule generated', 'success');
+    } catch (error) {
+      console.error('Error generating smart schedule:', error);
+      addToast('Failed to generate smart schedule', 'error');
+    } finally {
+      setScheduleLoading(false);
     }
   };
 
@@ -316,6 +413,31 @@ function AssignedTasks() {
     return getGlobalFilteredTasks.filter(t => t.status === status);
   };
 
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const todaysFocusSessions = focusHistory[todayKey] || 0;
+
+  const focusStreak = useMemo(() => {
+    let streak = 0;
+    const d = new Date();
+    while (true) {
+      const key = d.toISOString().slice(0, 10);
+      if ((focusHistory[key] || 0) > 0) {
+        streak += 1;
+        d.setDate(d.getDate() - 1);
+      } else {
+        break;
+      }
+    }
+    return streak;
+  }, [focusHistory]);
+
+  const focusTask = allTasks.find(t => String(t.id) === String(focusTaskId));
+  const formatTimer = (seconds) => {
+    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const secs = (seconds % 60).toString().padStart(2, '0');
+    return `${mins}:${secs}`;
+  };
+
   const getFilterViewInfo = () => {
     switch (activeTab) {
       case 'assigned-to-me':
@@ -442,6 +564,117 @@ function AssignedTasks() {
             )}
           </div>
         </div>
+
+        <div className="focus-card">
+          <div className="focus-card-header">
+            <h3>Focus Timer (Pomodoro)</h3>
+            <span>{formatTimer(timerSeconds)}</span>
+          </div>
+          <div className="focus-card-controls">
+            <select
+              value={focusTaskId}
+              onChange={(e) => setFocusTaskId(e.target.value)}
+              className="tasks-sort-select"
+            >
+              <option value="">No task selected</option>
+              {allTasks
+                .filter(t => t.status !== 'done' && t.status !== 'completed_late')
+                .map(t => (
+                  <option key={t.id} value={t.id}>{t.title}</option>
+                ))}
+            </select>
+            <button
+              type="button"
+              className={`focus-mode-btn ${timerRunning ? 'active' : ''}`}
+              onClick={() => setTimerRunning(prev => !prev)}
+            >
+              {timerRunning ? 'Pause' : 'Start 25m'}
+            </button>
+            <button
+              type="button"
+              className="focus-mode-btn"
+              onClick={() => {
+                setTimerRunning(false);
+                setTimerSeconds(POMODORO_SECONDS);
+              }}
+            >
+              Reset
+            </button>
+          </div>
+          <div className="focus-card-meta">
+            <span>Task: {focusTask ? focusTask.title : 'General focus'}</span>
+            <span>Today: {todaysFocusSessions} session(s)</span>
+            <span>Streak: {focusStreak} day(s)</span>
+          </div>
+        </div>
+
+        <div className="focus-card">
+          <div className="focus-card-header">
+            <h3>Streaks & Badges</h3>
+            <span>{(gamification?.badges || []).length} badge(s)</span>
+          </div>
+          <div className="focus-card-meta">
+            <span>Current Streak: {gamification?.streak?.current_streak || 0} day(s)</span>
+            <span>Longest: {gamification?.streak?.longest_streak || 0} day(s)</span>
+            <span>On-Time Done: {gamification?.streak?.on_time_completions || 0}</span>
+          </div>
+          {(gamification?.badges || []).length > 0 && (
+            <div className="focus-card-meta">
+              {(gamification.badges || []).slice(0, 4).map(badge => (
+                <span key={badge.code}>{badge.name}</span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="focus-card">
+          <div className="focus-card-header">
+            <h3>Smart Scheduling</h3>
+            <span>{smartSchedule.length} slots</span>
+          </div>
+          <div className="focus-card-controls">
+            <button
+              type="button"
+              className="focus-mode-btn"
+              onClick={() => generateSmartSchedule(false)}
+              disabled={scheduleLoading}
+            >
+              {scheduleLoading ? 'Planning...' : 'Preview 7-Day Plan'}
+            </button>
+            <button
+              type="button"
+              className="focus-mode-btn"
+              onClick={() => generateSmartSchedule(true)}
+              disabled={scheduleLoading}
+            >
+              Save Plan
+            </button>
+          </div>
+          <div className="focus-card-meta">
+            {(smartSchedule || []).slice(0, 4).map(slot => (
+              <span key={`${slot.taskId || slot.task_id}-${slot.plan_date}`}>
+                {new Date(slot.plan_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}: {slot.title} ({slot.planned_hours || slot.hours}h)
+              </span>
+            ))}
+            {smartSchedule.length === 0 && <span>No schedule yet</span>}
+          </div>
+        </div>
+
+        {stalledTasks.length > 0 && (
+          <div className="focus-card">
+            <div className="focus-card-header">
+              <h3>Stalled Task Nudges</h3>
+              <span>{stalledTasks.length}</span>
+            </div>
+            <div className="focus-card-meta">
+              {stalledTasks.slice(0, 4).map(task => (
+                <span key={task.id}>
+                  {task.title} ({task.stale_days}d inactive)
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="assigned-filter-bar">
           <div className="search-input-wrapper">

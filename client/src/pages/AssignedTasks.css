@@ -1,5 +1,67 @@
 /* AssignedTasks.css - Loomio-Style Assigned Tasks Page */
 
+/* Always show top task tabs (All / Assigned to Me / Assigned Tasks / etc.) */
+.tasks-tabs-container {
+  display: block;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  margin: 0 24px 20px;
+  overflow: hidden;
+  min-height: 55px;
+}
+
+.tasks-tabs {
+  display: flex !important;
+  width: 100%;
+  min-height: 55px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.tasks-tab {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 1 1 0;
+  min-height: 55px;
+  padding: 12px 16px;
+  border: none;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tasks-tab.active {
+  background: #000000;
+  color: #ffffff;
+  border-bottom-color: #000000;
+}
+
+.tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: #e5e7eb;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #6b7280;
+}
+
+.tasks-tab.active .tab-count {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
 /* Assigned Stats Row */
 .assigned-stats-row {
   display: flex;
@@ -1003,6 +1065,53 @@
   background: #111827;
   color: #ffffff;
   border-color: #111827;
+}
+
+.focus-card {
+  margin: 0 24px 12px;
+  padding: 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.focus-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.focus-card-header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #111827;
+}
+
+.focus-card-header span {
+  font-size: 20px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.focus-card-controls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.focus-card-controls .tasks-sort-select {
+  min-width: 240px;
+}
+
+.focus-card-meta {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  color: #6b7280;
+  font-size: 13px;
 }
 
 /* Detailed Card Status Variants */

@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     status VARCHAR(20) DEFAULT 'todo' CHECK (status IN ('todo', 'in-progress', 'done', 'completed_late')),
     task_type VARCHAR(20) DEFAULT 'personal' CHECK (task_type IN ('personal', 'team')),
     due_date DATE,
+    estimated_hours NUMERIC(6,2) DEFAULT 1,
     team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
     created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -243,3 +244,101 @@ CREATE TABLE IF NOT EXISTS task_point_awards (
     awarded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(task_id, user_id, award_type)
 );
+
+-- Gamification: streaks and badges
+CREATE TABLE IF NOT EXISTS user_streaks (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    current_streak INTEGER DEFAULT 0,
+    longest_streak INTEGER DEFAULT 0,
+    total_completions INTEGER DEFAULT 0,
+    on_time_completions INTEGER DEFAULT 0,
+    last_completion_date DATE,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS badges (
+    id SERIAL PRIMARY KEY,
+    code VARCHAR(80) UNIQUE NOT NULL,
+    name VARCHAR(120) NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS user_badges (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    badge_id INTEGER REFERENCES badges(id) ON DELETE CASCADE,
+    earned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, badge_id)
+);
+
+INSERT INTO badges (code, name, description) VALUES
+    ('first_finish', 'First Finish', 'Complete your first task'),
+    ('streak_3', '3-Day Streak', 'Complete tasks 3 days in a row'),
+    ('streak_7', '7-Day Streak', 'Complete tasks 7 days in a row'),
+    ('streak_30', '30-Day Streak', 'Complete tasks 30 days in a row'),
+    ('on_time_10', 'On-Time 10', 'Complete 10 tasks on time')
+ON CONFLICT (code) DO NOTHING;
+
+-- Smart scheduling plans
+CREATE TABLE IF NOT EXISTS smart_schedule_slots (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+    plan_date DATE NOT NULL,
+    planned_hours NUMERIC(6,2) NOT NULL,
+    status VARCHAR(20) DEFAULT 'planned' CHECK (status IN ('planned', 'done', 'skipped')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Daily stand-up check-ins
+CREATE TABLE IF NOT EXISTS team_standups (
+    id SERIAL PRIMARY KEY,
+    team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    checkin_date DATE NOT NULL,
+    plan_today TEXT NOT NULL,
+    blockers TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(team_id, user_id, checkin_date)
+);
+
+-- Stalled task nudge dedupe
+CREATE TABLE IF NOT EXISTS task_stalled_nudges (
+    id SERIAL PRIMARY KEY,
+    task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    nudge_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(task_id, user_id, nudge_date)
+);
+
+-- Courses and grade tracking
+CREATE TABLE IF NOT EXISTS courses (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    code VARCHAR(50),
+    semester VARCHAR(120),
+    target_grade NUMERIC(5,2) DEFAULT 85,
+    credits NUMERIC(5,2) DEFAULT 3,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS grade_items (
+    id SERIAL PRIMARY KEY,
+    course_id INTEGER REFERENCES courses(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    category VARCHAR(80),
+    weight NUMERIC(6,2) NOT NULL CHECK (weight >= 0 AND weight <= 100),
+    max_score NUMERIC(8,2) DEFAULT 100,
+    score NUMERIC(8,2),
+    due_date DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Safe task-course link for fresh and existing databases
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS course_id INTEGER REFERENCES courses(id) ON DELETE SET NULL;

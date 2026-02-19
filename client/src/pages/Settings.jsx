@@ -1,10 +1,11 @@
 // client/src/pages/Settings.jsx - LOOMIO-STYLE UI
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import axios from 'axios';
 import Sidebar from '../components/Sidebar';
 import { useApp } from '../context/AppContext';
 import { FaUser, FaBell, FaShieldAlt, FaPalette, FaCheck, FaCamera } from 'react-icons/fa';
-import { MdSettings, MdEmail, MdNotifications, MdSecurity, MdEdit } from 'react-icons/md';
+import { MdSettings, MdEmail, MdNotifications, MdSecurity, MdEdit, MdSchool } from 'react-icons/md';
 import './Dashboard.css';
 import './Settings.css';
 
@@ -14,12 +15,32 @@ function Settings() {
   const { currentUser, isAuthenticated, tasks, updateCurrentUserProfile } = useApp();
   const [activeTab, setActiveTab] = useState('profile');
   const [savingProfile, setSavingProfile] = useState(false);
+  const [courses, setCourses] = useState([]);
+  const [selectedCourseId, setSelectedCourseId] = useState('');
+  const [gradeItems, setGradeItems] = useState([]);
+  const [gradeProjection, setGradeProjection] = useState(null);
+  const [courseForm, setCourseForm] = useState({
+    name: '',
+    code: '',
+    semester: '',
+    targetGrade: 85,
+    credits: 3
+  });
+  const [gradeForm, setGradeForm] = useState({
+    title: '',
+    category: '',
+    weight: '',
+    maxScore: 100,
+    score: '',
+    dueDate: ''
+  });
   const [profileForm, setProfileForm] = useState({
     name: '',
     bio: '',
     avatar: ''
   });
   const fileInputRef = useRef(null);
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
   const [notifications, setNotifications] = useState({
     emailTaskAssigned: true,
     emailTaskComplete: true,
@@ -39,7 +60,7 @@ function Settings() {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const tab = params.get('tab');
-    if (tab && ['profile', 'notifications', 'security'].includes(tab)) {
+    if (tab && ['profile', 'notifications', 'security', 'academics'].includes(tab)) {
       setActiveTab(tab);
     } else if (location.pathname === '/notifications') {
       setActiveTab('notifications');
@@ -54,6 +75,16 @@ function Settings() {
       avatar: currentUser.avatar || ''
     });
   }, [currentUser]);
+
+  useEffect(() => {
+    if (isAuthenticated && currentUser) {
+      loadCourses();
+    }
+  }, [isAuthenticated, currentUser]);
+
+  useEffect(() => {
+    loadGradesAndProjection(selectedCourseId);
+  }, [selectedCourseId]);
 
   if (!isAuthenticated || !currentUser) {
     return null;
@@ -114,10 +145,89 @@ function Settings() {
     }
   };
 
+  const loadCourses = async () => {
+    try {
+      const token = localStorage.getItem('campusToken');
+      const response = await axios.get(`${API_URL}/courses`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setCourses(response.data || []);
+      if (!selectedCourseId && response.data?.length) {
+        setSelectedCourseId(String(response.data[0].id));
+      }
+    } catch (error) {
+      console.error('Load courses error:', error);
+    }
+  };
+
+  const loadGradesAndProjection = async (courseId) => {
+    if (!courseId) {
+      setGradeItems([]);
+      setGradeProjection(null);
+      return;
+    }
+    try {
+      const token = localStorage.getItem('campusToken');
+      const [gradesRes, projectionRes] = await Promise.all([
+        axios.get(`${API_URL}/courses/${courseId}/grades`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        axios.get(`${API_URL}/courses/${courseId}/projection`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+      ]);
+      setGradeItems(gradesRes.data || []);
+      setGradeProjection(projectionRes.data || null);
+    } catch (error) {
+      console.error('Load grade data error:', error);
+    }
+  };
+
+  const createCourse = async () => {
+    if (!courseForm.name.trim()) return;
+    try {
+      const token = localStorage.getItem('campusToken');
+      await axios.post(`${API_URL}/courses`, courseForm, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setCourseForm({ name: '', code: '', semester: '', targetGrade: 85, credits: 3 });
+      await loadCourses();
+    } catch (error) {
+      console.error('Create course error:', error);
+    }
+  };
+
+  const createGradeItem = async () => {
+    if (!selectedCourseId || !gradeForm.title.trim() || !gradeForm.weight) return;
+    try {
+      const token = localStorage.getItem('campusToken');
+      await axios.post(`${API_URL}/courses/${selectedCourseId}/grades`, gradeForm, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setGradeForm({ title: '', category: '', weight: '', maxScore: 100, score: '', dueDate: '' });
+      await loadGradesAndProjection(selectedCourseId);
+    } catch (error) {
+      console.error('Create grade item error:', error);
+    }
+  };
+
+  const deleteGradeItem = async (gradeId) => {
+    try {
+      const token = localStorage.getItem('campusToken');
+      await axios.delete(`${API_URL}/grades/${gradeId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      await loadGradesAndProjection(selectedCourseId);
+    } catch (error) {
+      console.error('Delete grade item error:', error);
+    }
+  };
+
   const tabs = [
     { id: 'profile', label: 'Profile', icon: FaUser },
     { id: 'notifications', label: 'Notifications', icon: MdNotifications },
-    { id: 'security', label: 'Security', icon: MdSecurity }
+    { id: 'security', label: 'Security', icon: MdSecurity },
+    { id: 'academics', label: 'Academics', icon: MdSchool }
   ];
 
   return (
@@ -390,6 +500,186 @@ function Settings() {
                     </div>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {activeTab === 'academics' && (
+              <div className="settings-panel">
+                <div className="settings-panel-header">
+                  <h2>Academics</h2>
+                  <p>Group tasks by course/semester and track grades</p>
+                </div>
+
+                <div className="settings-form-card">
+                  <h3>Add Course</h3>
+                  <div className="form-grid">
+                    <div className="form-group">
+                      <label>Course Name</label>
+                      <input
+                        type="text"
+                        value={courseForm.name}
+                        onChange={(e) => setCourseForm(prev => ({ ...prev, name: e.target.value }))}
+                        placeholder="Algorithms"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Course Code</label>
+                      <input
+                        type="text"
+                        value={courseForm.code}
+                        onChange={(e) => setCourseForm(prev => ({ ...prev, code: e.target.value }))}
+                        placeholder="CS301"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Semester</label>
+                      <input
+                        type="text"
+                        value={courseForm.semester}
+                        onChange={(e) => setCourseForm(prev => ({ ...prev, semester: e.target.value }))}
+                        placeholder="Semester 6"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Target Grade (%)</label>
+                      <input
+                        type="number"
+                        value={courseForm.targetGrade}
+                        onChange={(e) => setCourseForm(prev => ({ ...prev, targetGrade: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  <div className="form-actions">
+                    <button type="button" className="btn btn-primary" onClick={createCourse}>
+                      Add Course
+                    </button>
+                  </div>
+                </div>
+
+                <div className="settings-form-card">
+                  <h3>Courses</h3>
+                  <div className="form-group">
+                    <label>Select Course</label>
+                    <select
+                      value={selectedCourseId}
+                      onChange={(e) => setSelectedCourseId(e.target.value)}
+                    >
+                      <option value="">Select a course</option>
+                      {courses.map(course => (
+                        <option key={course.id} value={course.id}>
+                          {course.name} {course.semester ? `(${course.semester})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {gradeProjection && (
+                    <div className="profile-stats" style={{ marginTop: '12px' }}>
+                      <div className="profile-stat">
+                        <span className="stat-value">{gradeProjection.currentAverage}%</span>
+                        <span className="stat-label">Current Avg</span>
+                      </div>
+                      <div className="profile-stat">
+                        <span className="stat-value">{gradeProjection.projectedFinal}%</span>
+                        <span className="stat-label">Projected Final</span>
+                      </div>
+                      <div className="profile-stat">
+                        <span className="stat-value">{gradeProjection.neededAverageOnRemaining}%</span>
+                        <span className="stat-label">Needed Next</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {selectedCourseId && (
+                  <div className="settings-form-card">
+                    <h3>Add Grade Item</h3>
+                    <div className="form-grid">
+                      <div className="form-group">
+                        <label>Title</label>
+                        <input
+                          type="text"
+                          value={gradeForm.title}
+                          onChange={(e) => setGradeForm(prev => ({ ...prev, title: e.target.value }))}
+                          placeholder="Quiz 1"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Category</label>
+                        <input
+                          type="text"
+                          value={gradeForm.category}
+                          onChange={(e) => setGradeForm(prev => ({ ...prev, category: e.target.value }))}
+                          placeholder="Quiz"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Weight (%)</label>
+                        <input
+                          type="number"
+                          value={gradeForm.weight}
+                          onChange={(e) => setGradeForm(prev => ({ ...prev, weight: e.target.value }))}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Score</label>
+                        <input
+                          type="number"
+                          value={gradeForm.score}
+                          onChange={(e) => setGradeForm(prev => ({ ...prev, score: e.target.value }))}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Max Score</label>
+                        <input
+                          type="number"
+                          value={gradeForm.maxScore}
+                          onChange={(e) => setGradeForm(prev => ({ ...prev, maxScore: e.target.value }))}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Due Date</label>
+                        <input
+                          type="date"
+                          value={gradeForm.dueDate}
+                          onChange={(e) => setGradeForm(prev => ({ ...prev, dueDate: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+                    <div className="form-actions">
+                      <button type="button" className="btn btn-primary" onClick={createGradeItem}>
+                        Add Grade Item
+                      </button>
+                    </div>
+
+                    <div className="notification-options" style={{ marginTop: '12px' }}>
+                      {gradeItems.length === 0 && (
+                        <div className="notification-option">
+                          <div className="option-info">
+                            <span className="option-title">No grade items yet</span>
+                          </div>
+                        </div>
+                      )}
+                      {gradeItems.map(item => (
+                        <div className="notification-option" key={item.id}>
+                          <div className="option-info">
+                            <span className="option-title">{item.title}</span>
+                            <span className="option-desc">
+                              {item.category || 'General'} | {item.weight}% | {item.score ?? '-'} / {item.max_score}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => deleteGradeItem(item.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

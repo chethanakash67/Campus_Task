@@ -52,7 +52,7 @@ try {
         pass: process.env.EMAIL_PASSWORD
       }
     });
-    
+
     // Verify email configuration
     transporter.verify((error, success) => {
       if (error) {
@@ -71,13 +71,23 @@ try {
 }
 
 // ==================== DATABASE CONNECTION ====================
-const pool = new Pool({
-  host: process.env.DB_HOST || 'localhost',
-  port: process.env.DB_PORT || 5432,
-  database: process.env.DB_NAME || 'campustasks',
-  user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || 'your_password'
-});
+const isProduction = process.env.NODE_ENV === 'production';
+const connectionString = process.env.DATABASE_URL;
+
+const poolConfig = connectionString
+  ? {
+    connectionString,
+    ssl: isProduction ? { rejectUnauthorized: false } : false
+  }
+  : {
+    host: process.env.DB_HOST || 'localhost',
+    port: process.env.DB_PORT || 5432,
+    database: process.env.DB_NAME || 'campustasks',
+    user: process.env.DB_USER || 'postgres',
+    password: process.env.DB_PASSWORD || 'your_password'
+  };
+
+const pool = new Pool(poolConfig);
 
 pool.on('connect', () => console.log('✅ Connected to PostgreSQL database'));
 pool.on('error', (err) => {
@@ -89,7 +99,7 @@ pool.on('error', (err) => {
 pool.connect()
   .then(async (client) => {
     console.log('✅ Database connection successful');
-    
+
     // Run migration to add completed_late status
     try {
       // Drop and recreate the constraint to allow completed_late
@@ -103,7 +113,7 @@ pool.connect()
       // Constraint might not exist or already updated, that's okay
       console.log('ℹ️  Database migration note:', migrationErr.message);
     }
-    
+
     // Add progress and last_progress_update columns to tasks
     try {
       await client.query(`
@@ -114,7 +124,7 @@ pool.connect()
     } catch (migrationErr) {
       console.log('ℹ️  Progress migration note:', migrationErr.message);
     }
-    
+
     // Create task_activity table for activity timeline
     try {
       await client.query(`
@@ -202,7 +212,143 @@ pool.connect()
     } catch (migrationErr) {
       console.log('ℹ️  Task point awards migration note:', migrationErr.message);
     }
-    
+
+    // Gamification: streaks and badges
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS user_streaks (
+          user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+          current_streak INTEGER DEFAULT 0,
+          longest_streak INTEGER DEFAULT 0,
+          total_completions INTEGER DEFAULT 0,
+          on_time_completions INTEGER DEFAULT 0,
+          last_completion_date DATE,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS badges (
+          id SERIAL PRIMARY KEY,
+          code VARCHAR(80) UNIQUE NOT NULL,
+          name VARCHAR(120) NOT NULL,
+          description TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS user_badges (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          badge_id INTEGER REFERENCES badges(id) ON DELETE CASCADE,
+          earned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(user_id, badge_id)
+        );
+      `);
+
+      await client.query(`
+        INSERT INTO badges (code, name, description) VALUES
+          ('first_finish', 'First Finish', 'Complete your first task'),
+          ('streak_3', '3-Day Streak', 'Complete tasks 3 days in a row'),
+          ('streak_7', '7-Day Streak', 'Complete tasks 7 days in a row'),
+          ('streak_30', '30-Day Streak', 'Complete tasks 30 days in a row'),
+          ('on_time_10', 'On-Time 10', 'Complete 10 tasks on time')
+        ON CONFLICT (code) DO NOTHING;
+      `);
+      console.log('✅ Database migration: gamification tables ready');
+    } catch (migrationErr) {
+      console.log('ℹ️  Gamification migration note:', migrationErr.message);
+    }
+
+    // Smart scheduling suggestions storage
+    try {
+      await client.query(`
+        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS estimated_hours NUMERIC(6,2) DEFAULT 1;
+
+        CREATE TABLE IF NOT EXISTS smart_schedule_slots (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+          plan_date DATE NOT NULL,
+          planned_hours NUMERIC(6,2) NOT NULL,
+          status VARCHAR(20) DEFAULT 'planned' CHECK (status IN ('planned', 'done', 'skipped')),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+      console.log('✅ Database migration: smart schedule tables ready');
+    } catch (migrationErr) {
+      console.log('ℹ️  Smart schedule migration note:', migrationErr.message);
+    }
+
+    // Team daily stand-up check-ins
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS team_standups (
+          id SERIAL PRIMARY KEY,
+          team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
+          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          checkin_date DATE NOT NULL,
+          plan_today TEXT NOT NULL,
+          blockers TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(team_id, user_id, checkin_date)
+        );
+      `);
+      console.log('✅ Database migration: team standups ready');
+    } catch (migrationErr) {
+      console.log('ℹ️  Team standups migration note:', migrationErr.message);
+    }
+
+    // Stalled task nudge dedupe tracking
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS task_stalled_nudges (
+          id SERIAL PRIMARY KEY,
+          task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          nudge_date DATE NOT NULL DEFAULT CURRENT_DATE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(task_id, user_id, nudge_date)
+        );
+      `);
+      console.log('✅ Database migration: stalled nudge tracking ready');
+    } catch (migrationErr) {
+      console.log('ℹ️  Stalled nudge migration note:', migrationErr.message);
+    }
+
+    // Course/semester grouping and grade tracking
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS courses (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          name VARCHAR(255) NOT NULL,
+          code VARCHAR(50),
+          semester VARCHAR(120),
+          target_grade NUMERIC(5,2) DEFAULT 85,
+          credits NUMERIC(5,2) DEFAULT 3,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS grade_items (
+          id SERIAL PRIMARY KEY,
+          course_id INTEGER REFERENCES courses(id) ON DELETE CASCADE,
+          title VARCHAR(255) NOT NULL,
+          category VARCHAR(80),
+          weight NUMERIC(6,2) NOT NULL CHECK (weight >= 0 AND weight <= 100),
+          max_score NUMERIC(8,2) DEFAULT 100,
+          score NUMERIC(8,2),
+          due_date DATE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS course_id INTEGER REFERENCES courses(id) ON DELETE SET NULL;
+      `);
+      console.log('✅ Database migration: courses and grades ready');
+    } catch (migrationErr) {
+      console.log('ℹ️  Courses/grades migration note:', migrationErr.message);
+    }
+
     client.release();
   })
   .catch(err => {
@@ -215,17 +361,17 @@ const GOOGLE_OAUTH_ENABLED = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOG
 
 if (GOOGLE_OAUTH_ENABLED) {
   console.log('✅ Google OAuth is enabled');
-  
+
   passport.use(new GoogleStrategy({
-      clientID: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: `${process.env.BACKEND_URL || 'http://localhost:5001'}/api/auth/google/callback`
-    },
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: `${process.env.BACKEND_URL || 'http://localhost:5001'}/api/auth/google/callback`
+  },
     async (accessToken, refreshToken, profile, done) => {
       try {
         const email = profile.emails[0].value;
         let user = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-        
+
         if (user.rows.length === 0) {
           const name = profile.displayName;
           const avatar = name.substring(0, 2).toUpperCase();
@@ -240,7 +386,7 @@ if (GOOGLE_OAUTH_ENABLED) {
             [profile.id, user.rows[0].id]
           );
         }
-        
+
         return done(null, user.rows[0]);
       } catch (error) {
         return done(error, null);
@@ -287,10 +433,10 @@ async function sendOTPEmail(email, name, otp, purpose = 'verify') {
   }
 
   try {
-    const subject = purpose === 'login' 
-      ? 'Your CampusTasks Login Code' 
+    const subject = purpose === 'login'
+      ? 'Your CampusTasks Login Code'
       : 'Verify Your CampusTasks Account';
-    
+
     const greeting = purpose === 'login'
       ? `Welcome back, ${name}!`
       : `Welcome to CampusTasks, ${name}!`;
@@ -324,6 +470,8 @@ async function getCompleteTask(taskId) {
     SELECT t.*, 
       creator.name as creator_name,
       team.name as team_name,
+      c.name as course_name,
+      c.semester as course_semester,
       COALESCE(
         json_agg(DISTINCT jsonb_build_object(
           'id', u.id,
@@ -358,6 +506,7 @@ async function getCompleteTask(taskId) {
     FROM tasks t
     LEFT JOIN users creator ON t.created_by = creator.id
     LEFT JOIN teams team ON t.team_id = team.id
+    LEFT JOIN courses c ON t.course_id = c.id
     LEFT JOIN task_assignees ta ON t.id = ta.task_id
     LEFT JOIN users u ON ta.user_id = u.id
     LEFT JOIN task_tags tt ON t.id = tt.task_id
@@ -365,11 +514,11 @@ async function getCompleteTask(taskId) {
     LEFT JOIN comments c ON t.id = c.task_id
     LEFT JOIN users cu ON c.user_id = cu.id
     WHERE t.id = $1
-    GROUP BY t.id, creator.name, team.name
+    GROUP BY t.id, creator.name, team.name, c.name, c.semester
   `, [taskId]);
 
   if (!result.rows[0]) return null;
-  
+
   const task = result.rows[0];
   return {
     id: task.id,
@@ -379,8 +528,12 @@ async function getCompleteTask(taskId) {
     status: task.status,
     taskType: task.task_type,
     dueDate: task.due_date,
+    estimatedHours: Number(task.estimated_hours || 1),
     teamId: task.team_id,
     teamName: task.team_name,
+    courseId: task.course_id,
+    courseName: task.course_name,
+    semester: task.course_semester,
     createdBy: task.created_by,
     creatorName: task.creator_name,
     progress: task.progress || 0,
@@ -546,6 +699,250 @@ async function awardTaskCompletionPoints(taskId, completerId, ownerId) {
   }
 }
 
+async function awardBadgeByCode(userId, badgeCode) {
+  const result = await pool.query(
+    `INSERT INTO user_badges (user_id, badge_id)
+     SELECT $1, b.id
+     FROM badges b
+     WHERE b.code = $2
+     ON CONFLICT (user_id, badge_id) DO NOTHING
+     RETURNING id`,
+    [userId, badgeCode]
+  );
+  return result.rows.length > 0;
+}
+
+async function updateUserStreakAndBadges(userId, completionStatus) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const streakResult = await client.query(
+      `SELECT current_streak, longest_streak, total_completions, on_time_completions, last_completion_date
+       FROM user_streaks
+       WHERE user_id = $1`,
+      [userId]
+    );
+
+    const today = new Date();
+    const todayStr = today.toISOString().slice(0, 10);
+    let currentStreak = 1;
+    let longestStreak = 1;
+    let totalCompletions = 0;
+    let onTimeCompletions = 0;
+    let alreadyCountedToday = false;
+
+    if (streakResult.rows.length > 0) {
+      const row = streakResult.rows[0];
+      const lastDate = row.last_completion_date
+        ? new Date(row.last_completion_date).toISOString().slice(0, 10)
+        : null;
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().slice(0, 10);
+
+      currentStreak = Number(row.current_streak || 0);
+      longestStreak = Number(row.longest_streak || 0);
+      totalCompletions = Number(row.total_completions || 0);
+      onTimeCompletions = Number(row.on_time_completions || 0);
+
+      if (lastDate === todayStr) {
+        alreadyCountedToday = true;
+      } else if (lastDate === yesterdayStr) {
+        currentStreak += 1;
+      } else {
+        currentStreak = 1;
+      }
+
+      if (!alreadyCountedToday) {
+        totalCompletions += 1;
+        if (completionStatus === 'done') onTimeCompletions += 1;
+      }
+      if (currentStreak > longestStreak) longestStreak = currentStreak;
+
+      await client.query(
+        `UPDATE user_streaks
+         SET current_streak = $1,
+             longest_streak = $2,
+             total_completions = $3,
+             on_time_completions = $4,
+             last_completion_date = $5,
+             updated_at = NOW()
+         WHERE user_id = $6`,
+        [currentStreak, longestStreak, totalCompletions, onTimeCompletions, todayStr, userId]
+      );
+    } else {
+      totalCompletions = 1;
+      onTimeCompletions = completionStatus === 'done' ? 1 : 0;
+      await client.query(
+        `INSERT INTO user_streaks
+         (user_id, current_streak, longest_streak, total_completions, on_time_completions, last_completion_date)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [userId, currentStreak, longestStreak, totalCompletions, onTimeCompletions, todayStr]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    const newlyEarned = [];
+    const badgeChecks = [
+      { code: 'first_finish', ok: totalCompletions >= 1 },
+      { code: 'streak_3', ok: currentStreak >= 3 },
+      { code: 'streak_7', ok: currentStreak >= 7 },
+      { code: 'streak_30', ok: currentStreak >= 30 },
+      { code: 'on_time_10', ok: onTimeCompletions >= 10 }
+    ];
+
+    for (const badge of badgeChecks) {
+      if (!badge.ok) continue;
+      const awarded = await awardBadgeByCode(userId, badge.code);
+      if (awarded) newlyEarned.push(badge.code);
+    }
+
+    return {
+      currentStreak,
+      longestStreak,
+      totalCompletions,
+      onTimeCompletions,
+      newlyEarned
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Streak/badge update error:', error.message);
+    return null;
+  } finally {
+    client.release();
+  }
+}
+
+function buildSmartSchedule(tasks, days = 7, dailyHours = 3) {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const dayBuckets = Array.from({ length: days }, (_, i) => {
+    const d = new Date(start);
+    d.setDate(d.getDate() + i);
+    return {
+      date: d.toISOString().slice(0, 10),
+      availableHours: dailyHours,
+      items: []
+    };
+  });
+
+  const scored = tasks.map(task => {
+    const progress = Number(task.progress || 0);
+    const estimate = Math.max(0.5, Number(task.estimated_hours || 1));
+    const remainingHours = Math.max(0.5, estimate * (1 - progress / 100));
+    const priorityScore = task.priority === 'High' ? 3 : task.priority === 'Medium' ? 2 : 1;
+    const dueDays = task.due_date
+      ? Math.max(0, Math.ceil((new Date(task.due_date) - start) / (1000 * 60 * 60 * 24)))
+      : 999;
+    return {
+      ...task,
+      remainingHours,
+      priorityScore,
+      dueDays
+    };
+  }).sort((a, b) => {
+    if (a.dueDays !== b.dueDays) return a.dueDays - b.dueDays;
+    if (a.priorityScore !== b.priorityScore) return b.priorityScore - a.priorityScore;
+    return new Date(a.created_at) - new Date(b.created_at);
+  });
+
+  for (const task of scored) {
+    let remaining = task.remainingHours;
+    for (const day of dayBuckets) {
+      if (remaining <= 0) break;
+      if (day.availableHours <= 0) continue;
+      const alloc = Math.min(2, day.availableHours, remaining);
+      if (alloc <= 0) continue;
+      day.items.push({
+        taskId: task.id,
+        title: task.title,
+        priority: task.priority,
+        dueDate: task.due_date,
+        hours: Number(alloc.toFixed(2)),
+        reason: task.dueDays <= 2 ? 'urgent_due' : task.priority === 'High' ? 'high_priority' : 'scheduled'
+      });
+      day.availableHours = Number((day.availableHours - alloc).toFixed(2));
+      remaining = Number((remaining - alloc).toFixed(2));
+    }
+  }
+
+  return dayBuckets;
+}
+
+async function sendStalledTaskNudges() {
+  try {
+    const stalled = await pool.query(`
+      SELECT
+        t.id AS task_id,
+        t.title AS task_title,
+        t.team_id,
+        ta.user_id,
+        u.email,
+        u.name AS user_name,
+        COALESCE(t.last_progress_update, t.updated_at, t.created_at) AS last_touched_at
+      FROM tasks t
+      JOIN task_assignees ta ON ta.task_id = t.id
+      JOIN users u ON u.id = ta.user_id
+      WHERE t.status NOT IN ('done', 'completed_late')
+        AND COALESCE(t.last_progress_update, t.updated_at, t.created_at) <= NOW() - INTERVAL '7 days'
+    `);
+
+    for (const row of stalled.rows) {
+      const dedupe = await pool.query(
+        `INSERT INTO task_stalled_nudges (task_id, user_id, nudge_date)
+         VALUES ($1, $2, CURRENT_DATE)
+         ON CONFLICT (task_id, user_id, nudge_date) DO NOTHING
+         RETURNING id`,
+        [row.task_id, row.user_id]
+      );
+
+      if (dedupe.rows.length === 0) continue;
+
+      await createNotification(
+        row.user_id,
+        'task_due_soon',
+        'Stalled Task Nudge',
+        `"${row.task_title}" has not been updated for 7+ days. Consider splitting or rescheduling it.`,
+        '/tasks',
+        { taskId: row.task_id, type: 'stalled_task' }
+      );
+
+      if (transporter && emailConfigured && row.email) {
+        try {
+          await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: row.email,
+            subject: `Nudge: "${row.task_title}" looks stalled`,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 620px; margin: 0 auto; padding: 20px;">
+                <h2 style="margin-top: 0;">Task Nudge</h2>
+                <p>Hi ${row.user_name || 'there'},</p>
+                <p>Your task <strong>${row.task_title}</strong> has not been updated for over 7 days.</p>
+                <p>Try one of these:</p>
+                <ul>
+                  <li>Split it into smaller subtasks</li>
+                  <li>Reschedule to a realistic date</li>
+                  <li>Add a quick progress update</li>
+                </ul>
+                <a href="${FRONTEND_URL}/tasks"
+                   style="display:inline-block;background:#111827;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;">
+                  Open Tasks
+                </a>
+              </div>
+            `
+          });
+        } catch (emailError) {
+          console.error(`Stalled nudge email error for task ${row.task_id}:`, emailError.message);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Stalled task nudge job failed:', error.message);
+  }
+}
+
 async function generateUniqueTeamCode(client) {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   for (let attempt = 0; attempt < 20; attempt += 1) {
@@ -569,14 +966,14 @@ function isAvatarImage(value) {
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    
+
     if (!email || !password) {
       return res.status(400).json({ error: 'All fields required' });
     }
 
     // Find user
     const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    
+
     if (result.rows.length === 0) {
       return res.status(400).json({ error: 'Invalid credentials' });
     }
@@ -591,14 +988,14 @@ app.post('/api/auth/login', async (req, res) => {
 
     // Generate token
     const token = jwt.sign(
-      { id: user.id, email: user.email }, 
+      { id: user.id, email: user.email },
       process.env.JWT_SECRET || 'your_jwt_secret_key',
       { expiresIn: '7d' }
     );
 
     // Return user data and token
-    res.json({ 
-      message: 'Login successful!', 
+    res.json({
+      message: 'Login successful!',
       user: {
         id: user.id,
         name: user.name,
@@ -606,7 +1003,7 @@ app.post('/api/auth/login', async (req, res) => {
         avatar: user.avatar,
         points: user.points || 0
       },
-      token 
+      token
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -621,11 +1018,11 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
       'SELECT id, name, email, avatar, bio, COALESCE(points, 0) as points FROM users WHERE id = $1',
       [req.user.id]
     );
-    
+
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
-    
+
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Get user error:', error);
@@ -694,16 +1091,16 @@ app.post('/api/auth/request-otp-register', async (req, res) => {
     );
 
     const emailSent = await sendOTPEmail(email, name, otp, 'register');
-    
+
     if (emailSent) {
-      res.json({ 
+      res.json({
         message: 'OTP sent successfully',
         email: email
       });
     } else {
       // Email not configured - for development, still allow registration
       console.log(`📧 Development mode - OTP for ${email}: ${otp}`);
-      res.json({ 
+      res.json({
         message: 'OTP generated (check server console in dev mode)',
         email: email,
         devMode: true
@@ -931,7 +1328,7 @@ app.post('/api/auth/resend-otp', async (req, res) => {
   try {
     const { email, purpose } = req.body;
     const user = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    
+
     const otp = generateOTP();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
@@ -944,7 +1341,7 @@ app.post('/api/auth/resend-otp', async (req, res) => {
     const emailSent = await sendOTPEmail(email, name, otp, purpose);
 
     if (!emailSent) {
-      return res.json({ 
+      return res.json({
         message: 'OTP generated (Dev Mode)',
         devMode: true,
         otp: process.env.NODE_ENV !== 'production' ? otp : undefined
@@ -994,7 +1391,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     } else {
       console.log(`Dev Mode: Reset token for ${email}: ${resetToken}`);
     }
-    
+
     res.json({ message: 'Password reset link sent' });
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
@@ -1118,7 +1515,7 @@ app.post('/api/teams', authenticateToken, async (req, res) => {
     }
 
     await client.query('COMMIT');
-    
+
     // Fetch created team to return formatted result
     const completeTeam = await client.query(`
       SELECT t.*, 
@@ -1132,7 +1529,7 @@ app.post('/api/teams', authenticateToken, async (req, res) => {
       LEFT JOIN users u ON tm.user_id = u.id
       WHERE t.id = $1 GROUP BY t.id
     `, [team.id]);
-    
+
     res.status(201).json(completeTeam.rows[0]);
   } catch (error) {
     await client.query('ROLLBACK');
@@ -1148,14 +1545,14 @@ app.post('/api/teams/accept-invitation', async (req, res) => {
   const client = await pool.connect();
   try {
     const { token, userId } = req.body;
-    
+
     // Validate token format
     try {
       jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key');
     } catch (jwtError) {
       return res.status(400).json({ error: 'Invalid invitation token' });
     }
-    
+
     // Fetch invitation
     const invitation = await client.query(
       'SELECT * FROM team_invitations WHERE token = $1 AND status = $2 AND expires_at > NOW()',
@@ -1178,8 +1575,8 @@ app.post('/api/teams/accept-invitation', async (req, res) => {
 
     // Validate user email matches invitation email
     if (user.email.toLowerCase() !== invite.invitee_email.toLowerCase()) {
-      return res.status(403).json({ 
-        error: 'This invitation is for a different email address. Please use the account that matches the invitation email.' 
+      return res.status(403).json({
+        error: 'This invitation is for a different email address. Please use the account that matches the invitation email.'
       });
     }
 
@@ -1197,7 +1594,7 @@ app.post('/api/teams/accept-invitation', async (req, res) => {
           ['accepted', invite.id]
         );
       }
-      return res.status(200).json({ 
+      return res.status(200).json({
         message: 'You are already a member of this team',
         alreadyMember: true
       });
@@ -1205,7 +1602,7 @@ app.post('/api/teams/accept-invitation', async (req, res) => {
 
     // User is not a member - proceed with insertion
     await client.query('BEGIN');
-    
+
     // Insert into team_members
     const insertResult = await client.query(
       'INSERT INTO team_members (team_id, user_id, role) VALUES ($1, $2, $3) RETURNING id',
@@ -1244,7 +1641,7 @@ app.get('/api/invitations/pending', authenticateToken, async (req, res) => {
       WHERE ti.invitee_email = $1 AND ti.status = 'pending' AND ti.expires_at > NOW()
       ORDER BY ti.created_at DESC
     `, [req.user.email]);
-    
+
     res.json(result.rows);
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
@@ -1532,9 +1929,10 @@ app.delete('/api/teams/:id', authenticateToken, async (req, res) => {
 app.get('/api/tasks/assigned', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT t.*, team.name as team_name
+      SELECT t.*, team.name as team_name, c.name as course_name, c.semester as course_semester
       FROM tasks t
       LEFT JOIN teams team ON t.team_id = team.id
+      LEFT JOIN courses c ON t.course_id = c.id
       WHERE t.id IN (SELECT task_id FROM task_assignees WHERE user_id = $1)
         AND t.created_by <> $1
       ORDER BY t.created_at DESC
@@ -1549,7 +1947,7 @@ app.get('/api/tasks/assigned', authenticateToken, async (req, res) => {
 app.get('/api/tasks/created', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT t.*, team.name as team_name,
+      SELECT t.*, team.name as team_name, c.name as course_name, c.semester as course_semester,
         COALESCE(
           json_agg(DISTINCT jsonb_build_object(
             'id', u.id,
@@ -1560,6 +1958,7 @@ app.get('/api/tasks/created', authenticateToken, async (req, res) => {
         ) as assignees
       FROM tasks t
       LEFT JOIN teams team ON t.team_id = team.id
+      LEFT JOIN courses c ON t.course_id = c.id
       LEFT JOIN task_assignees ta ON t.id = ta.task_id
       LEFT JOIN users u ON ta.user_id = u.id
       WHERE t.created_by = $1
@@ -1568,7 +1967,7 @@ app.get('/api/tasks/created', authenticateToken, async (req, res) => {
           FROM task_assignees ta2
           WHERE ta2.task_id = t.id AND ta2.user_id <> $1
         )
-      GROUP BY t.id, team.name
+      GROUP BY t.id, team.name, c.name, c.semester
       ORDER BY t.created_at DESC
     `, [req.user.id]);
     res.json(result.rows);
@@ -1584,6 +1983,8 @@ app.get('/api/tasks', authenticateToken, async (req, res) => {
     const { type, teamId } = req.query;
     let query = `
       SELECT t.*, 
+        c.name as course_name,
+        c.semester as course_semester,
         COALESCE(json_agg(DISTINCT tt.tag_name) FILTER (WHERE tt.tag_name IS NOT NULL), '[]') as tags,
         COALESCE(
           json_agg(DISTINCT jsonb_build_object(
@@ -1597,6 +1998,7 @@ app.get('/api/tasks', authenticateToken, async (req, res) => {
       LEFT JOIN task_assignees ta ON t.id = ta.task_id
       LEFT JOIN users u ON ta.user_id = u.id
       LEFT JOIN task_tags tt ON t.id = tt.task_id
+      LEFT JOIN courses c ON t.course_id = c.id
       WHERE t.id IN (SELECT task_id FROM task_assignees WHERE user_id = $1)
     `;
     const params = [req.user.id];
@@ -1604,7 +2006,7 @@ app.get('/api/tasks', authenticateToken, async (req, res) => {
     if (type) { query += ' AND t.task_type = $2'; params.push(type); }
     if (teamId) { query += ` AND t.team_id = $${params.length + 1}`; params.push(teamId); }
 
-    query += ' GROUP BY t.id ORDER BY t.created_at DESC';
+    query += ' GROUP BY t.id, c.name, c.semester ORDER BY t.created_at DESC';
     const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (error) {
@@ -1617,11 +2019,38 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { title, description, priority, status, dueDate, tags, assignees, taskType, teamId, subtasks } = req.body;
+    const {
+      title,
+      description,
+      priority,
+      status,
+      dueDate,
+      tags,
+      assignees,
+      taskType,
+      teamId,
+      subtasks,
+      estimatedHours,
+      courseId
+    } = req.body;
 
     const taskResult = await client.query(
-      'INSERT INTO tasks (title, description, priority, status, due_date, task_type, team_id, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
-      [title, description || '', priority || 'Medium', status || 'todo', dueDate, taskType || 'personal', teamId, req.user.id]
+      `INSERT INTO tasks
+       (title, description, priority, status, due_date, task_type, team_id, created_by, estimated_hours, course_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING *`,
+      [
+        title,
+        description || '',
+        priority || 'Medium',
+        status || 'todo',
+        dueDate,
+        taskType || 'personal',
+        teamId,
+        req.user.id,
+        Number(estimatedHours) > 0 ? Number(estimatedHours) : 1,
+        courseId || null
+      ]
     );
     const task = taskResult.rows[0];
 
@@ -1629,7 +2058,7 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
     // For team tasks, only assign creator if they are in the assignees list
     const isTeamTask = taskType === 'team' && teamId;
     const creatorInAssignees = assignees && assignees.some(a => a.id === req.user.id);
-    
+
     if (!isTeamTask || creatorInAssignees) {
       await client.query('INSERT INTO task_assignees (task_id, user_id) VALUES ($1, $2)', [task.id, req.user.id]);
     }
@@ -1651,9 +2080,9 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
         if (assignee.id === req.user.id && (!isTeamTask || creatorInAssignees)) {
           continue; // Already added above
         }
-        
+
         await client.query('INSERT INTO task_assignees (task_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [task.id, assignee.id]);
-        
+
         // Send notification only to others (not the creator)
         if (assignee.id !== req.user.id) {
           // Create notification for assigned user
@@ -1671,7 +2100,7 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
             try {
               const userResult = await client.query('SELECT email, name FROM users WHERE id = $1', [assignee.id]);
               const assignedUser = userResult.rows[0];
-              
+
               if (assignedUser?.email) {
                 await transporter.sendMail({
                   from: process.env.EMAIL_USER,
@@ -1779,14 +2208,14 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
     if (!isCreator && !isAssignee) {
       return res.status(403).json({ error: 'You are not authorized to update this task' });
     }
-    
+
     const dbUpdates = {};
-    
+
     // Only allow updating tasks table fields here
-    const validFields = ['title', 'description', 'priority', 'status', 'dueDate', 'taskType'];
-    
+    const validFields = ['title', 'description', 'priority', 'status', 'dueDate', 'taskType', 'estimatedHours', 'courseId'];
+
     Object.keys(updates).forEach(key => {
-      if(validFields.includes(key)) {
+      if (validFields.includes(key)) {
         const snakeKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
         dbUpdates[snakeKey] = updates[key];
       }
@@ -1797,7 +2226,7 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
       const dueDate = new Date(task.due_date);
       dueDate.setHours(23, 59, 59, 999);
       const now = new Date();
-      
+
       if (now > dueDate) {
         // Late submission - change status to 'completed_late'
         dbUpdates.status = 'completed_late';
@@ -1820,6 +2249,10 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
 
     const previousStatus = task.status;
     const nextStatus = dbUpdates.status || task.status;
+    const transitionedToCompleted =
+      (nextStatus === 'done' || nextStatus === 'completed_late') &&
+      previousStatus !== 'done' &&
+      previousStatus !== 'completed_late';
     const transitionedToOnTimeDone =
       nextStatus === 'done' &&
       previousStatus !== 'done' &&
@@ -1837,7 +2270,22 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
     if (transitionedToOnTimeDone) {
       await awardTaskCompletionPoints(id, req.user.id, task.created_by);
     }
-    
+    if (transitionedToCompleted) {
+      const gamification = await updateUserStreakAndBadges(req.user.id, nextStatus);
+      if (gamification?.newlyEarned?.length) {
+        for (const badgeCode of gamification.newlyEarned) {
+          await createNotification(
+            req.user.id,
+            'task_assigned',
+            'New Badge Unlocked',
+            `You unlocked a new badge: ${badgeCode.replace('_', ' ')}`,
+            '/leaderboard',
+            { badgeCode }
+          );
+        }
+      }
+    }
+
     const updatedTask = await getCompleteTask(id);
     res.json(updatedTask);
   } catch (error) {
@@ -1895,21 +2343,21 @@ app.post('/api/tasks/:id/progress', authenticateToken, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    
+
     const { id } = req.params;
     const { progress, note } = req.body;
-    
+
     // Check if user is assigned to this task
     const assigneeCheck = await client.query(
       'SELECT * FROM task_assignees WHERE task_id = $1 AND user_id = $2',
       [id, req.user.id]
     );
-    
+
     if (assigneeCheck.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(403).json({ error: 'Only assigned users can update progress' });
     }
-    
+
     // Get task details for notifications
     const taskResult = await client.query(`
       SELECT t.*, u.name as creator_name, u.email as creator_email
@@ -1917,25 +2365,25 @@ app.post('/api/tasks/:id/progress', authenticateToken, async (req, res) => {
       LEFT JOIN users u ON t.created_by = u.id
       WHERE t.id = $1
     `, [id]);
-    
+
     if (taskResult.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Task not found' });
     }
-    
+
     const task = taskResult.rows[0];
     const oldProgress = task.progress || 0;
-    
+
     // Update task progress
     await client.query(
       'UPDATE tasks SET progress = $1, last_progress_update = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
       [progress, id]
     );
-    
+
     // Get user name for activity log
     const userResult = await client.query('SELECT name FROM users WHERE id = $1', [req.user.id]);
     const userName = userResult.rows[0]?.name || 'Unknown User';
-    
+
     // Create activity log entry
     await client.query(`
       INSERT INTO task_activity (task_id, user_id, activity_type, message, old_value, new_value, note)
@@ -1949,9 +2397,9 @@ app.post('/api/tasks/:id/progress', authenticateToken, async (req, res) => {
       progress.toString(),
       note || null
     ]);
-    
+
     await client.query('COMMIT');
-    
+
     // Send email notification to task owner if different from updater
     if (task.created_by !== req.user.id && transporter && emailConfigured) {
       try {
@@ -1961,7 +2409,7 @@ app.post('/api/tasks/:id/progress', authenticateToken, async (req, res) => {
           const teamResult = await pool.query('SELECT name FROM teams WHERE id = $1', [task.team_id]);
           teamName = teamResult.rows[0]?.name;
         }
-        
+
         await transporter.sendMail({
           from: process.env.EMAIL_USER,
           to: task.creator_email,
@@ -2014,7 +2462,7 @@ app.post('/api/tasks/:id/progress', authenticateToken, async (req, res) => {
         // Don't fail the request if email fails
       }
     }
-    
+
     const updatedTask = await getCompleteTask(id);
     res.json(updatedTask);
   } catch (error) {
@@ -2030,18 +2478,18 @@ app.post('/api/tasks/:id/progress', authenticateToken, async (req, res) => {
 app.get('/api/tasks/:id/activity', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     // Check if user has access to this task
     const taskCheck = await pool.query(`
       SELECT t.* FROM tasks t
       LEFT JOIN task_assignees ta ON t.id = ta.task_id
       WHERE t.id = $1 AND (t.created_by = $2 OR ta.user_id = $2)
     `, [id, req.user.id]);
-    
+
     if (taskCheck.rows.length === 0) {
       return res.status(403).json({ error: 'Access denied' });
     }
-    
+
     // Get activity log
     const activityResult = await pool.query(`
       SELECT 
@@ -2053,7 +2501,7 @@ app.get('/api/tasks/:id/activity', authenticateToken, async (req, res) => {
       ORDER BY ta.created_at DESC
       LIMIT 50
     `, [id]);
-    
+
     const activities = activityResult.rows.map(a => ({
       id: a.id,
       type: a.activity_type,
@@ -2064,7 +2512,7 @@ app.get('/api/tasks/:id/activity', authenticateToken, async (req, res) => {
       note: a.note,
       createdAt: a.created_at
     }));
-    
+
     res.json(activities);
   } catch (error) {
     console.error('Get activity error:', error);
@@ -2247,11 +2695,475 @@ app.get('/api/leaderboard', authenticateToken, async (req, res) => {
   }
 });
 
+// Gamification snapshot
+app.get('/api/gamification/me', authenticateToken, async (req, res) => {
+  try {
+    const streak = await pool.query(
+      `SELECT current_streak, longest_streak, total_completions, on_time_completions, last_completion_date
+       FROM user_streaks
+       WHERE user_id = $1`,
+      [req.user.id]
+    );
+    const badges = await pool.query(
+      `SELECT b.code, b.name, b.description, ub.earned_at
+       FROM user_badges ub
+       JOIN badges b ON b.id = ub.badge_id
+       WHERE ub.user_id = $1
+       ORDER BY ub.earned_at DESC`,
+      [req.user.id]
+    );
+    res.json({
+      streak: streak.rows[0] || {
+        current_streak: 0,
+        longest_streak: 0,
+        total_completions: 0,
+        on_time_completions: 0,
+        last_completion_date: null
+      },
+      badges: badges.rows
+    });
+  } catch (error) {
+    console.error('Gamification fetch error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Smart schedule suggestion preview
+app.post('/api/tasks/smart-schedule/preview', authenticateToken, async (req, res) => {
+  try {
+    const days = Math.min(14, Math.max(3, Number(req.body.days || 7)));
+    const dailyHours = Math.min(10, Math.max(1, Number(req.body.dailyHours || 3)));
+
+    const tasksResult = await pool.query(
+      `SELECT t.id, t.title, t.priority, t.due_date, t.progress, t.estimated_hours, t.created_at
+       FROM tasks t
+       JOIN task_assignees ta ON ta.task_id = t.id
+       WHERE ta.user_id = $1
+         AND t.status NOT IN ('done', 'completed_late')
+       ORDER BY t.created_at ASC`,
+      [req.user.id]
+    );
+
+    const schedule = buildSmartSchedule(tasksResult.rows, days, dailyHours);
+    res.json({ days, dailyHours, schedule });
+  } catch (error) {
+    console.error('Smart schedule preview error:', error);
+    res.status(500).json({ error: 'Failed to build schedule preview' });
+  }
+});
+
+// Persist smart schedule suggestions
+app.post('/api/tasks/smart-schedule/apply', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const days = Math.min(14, Math.max(3, Number(req.body.days || 7)));
+    const dailyHours = Math.min(10, Math.max(1, Number(req.body.dailyHours || 3)));
+    const tasksResult = await client.query(
+      `SELECT t.id, t.title, t.priority, t.due_date, t.progress, t.estimated_hours, t.created_at
+       FROM tasks t
+       JOIN task_assignees ta ON ta.task_id = t.id
+       WHERE ta.user_id = $1
+         AND t.status NOT IN ('done', 'completed_late')
+       ORDER BY t.created_at ASC`,
+      [req.user.id]
+    );
+    const schedule = buildSmartSchedule(tasksResult.rows, days, dailyHours);
+
+    await client.query('BEGIN');
+    await client.query(
+      `DELETE FROM smart_schedule_slots
+       WHERE user_id = $1 AND plan_date >= CURRENT_DATE AND status = 'planned'`,
+      [req.user.id]
+    );
+
+    for (const day of schedule) {
+      for (const item of day.items) {
+        await client.query(
+          `INSERT INTO smart_schedule_slots (user_id, task_id, plan_date, planned_hours, status)
+           VALUES ($1, $2, $3, $4, 'planned')`,
+          [req.user.id, item.taskId, day.date, item.hours]
+        );
+      }
+    }
+    await client.query('COMMIT');
+    res.json({ message: 'Smart schedule saved', schedule });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Smart schedule apply error:', error);
+    res.status(500).json({ error: 'Failed to save smart schedule' });
+  } finally {
+    client.release();
+  }
+});
+
+app.get('/api/tasks/schedule', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT s.*, t.title, t.priority, t.due_date
+       FROM smart_schedule_slots s
+       JOIN tasks t ON t.id = s.task_id
+       WHERE s.user_id = $1
+         AND s.plan_date >= CURRENT_DATE
+       ORDER BY s.plan_date ASC, s.created_at ASC`,
+      [req.user.id]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Fetch schedule error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Stalled task suggestions for current user
+app.get('/api/tasks/stalled', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT
+         t.id,
+         t.title,
+         t.priority,
+         t.status,
+         t.due_date,
+         COALESCE(t.last_progress_update, t.updated_at, t.created_at) AS last_touched_at,
+         EXTRACT(DAY FROM NOW() - COALESCE(t.last_progress_update, t.updated_at, t.created_at))::int AS stale_days
+       FROM tasks t
+       JOIN task_assignees ta ON ta.task_id = t.id
+       WHERE ta.user_id = $1
+         AND t.status NOT IN ('done', 'completed_late')
+         AND COALESCE(t.last_progress_update, t.updated_at, t.created_at) <= NOW() - INTERVAL '7 days'
+       ORDER BY stale_days DESC, t.priority DESC`,
+      [req.user.id]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Fetch stalled tasks error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Team daily stand-ups
+app.get('/api/teams/:teamId/standups/today', authenticateToken, async (req, res) => {
+  try {
+    const { teamId } = req.params;
+    const membership = await pool.query(
+      'SELECT role FROM team_members WHERE team_id = $1 AND user_id = $2',
+      [teamId, req.user.id]
+    );
+    if (membership.rows.length === 0) {
+      return res.status(403).json({ error: 'You are not a member of this team' });
+    }
+
+    const result = await pool.query(
+      `SELECT ts.id, ts.team_id, ts.user_id, ts.checkin_date, ts.plan_today, ts.blockers, ts.updated_at,
+              u.name, u.email, u.avatar
+       FROM team_standups ts
+       JOIN users u ON u.id = ts.user_id
+       WHERE ts.team_id = $1 AND ts.checkin_date = CURRENT_DATE
+       ORDER BY ts.updated_at DESC`,
+      [teamId]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Get standups error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/teams/:teamId/standups', authenticateToken, async (req, res) => {
+  try {
+    const { teamId } = req.params;
+    const { planToday, blockers } = req.body;
+    if (!planToday || !planToday.trim()) {
+      return res.status(400).json({ error: 'Today plan is required' });
+    }
+
+    const membership = await pool.query(
+      'SELECT role FROM team_members WHERE team_id = $1 AND user_id = $2',
+      [teamId, req.user.id]
+    );
+    if (membership.rows.length === 0) {
+      return res.status(403).json({ error: 'You are not a member of this team' });
+    }
+
+    const upsert = await pool.query(
+      `INSERT INTO team_standups (team_id, user_id, checkin_date, plan_today, blockers)
+       VALUES ($1, $2, CURRENT_DATE, $3, $4)
+       ON CONFLICT (team_id, user_id, checkin_date)
+       DO UPDATE SET plan_today = EXCLUDED.plan_today, blockers = EXCLUDED.blockers, updated_at = NOW()
+       RETURNING *`,
+      [teamId, req.user.id, planToday.trim(), (blockers || '').trim() || null]
+    );
+
+    if (blockers && blockers.trim()) {
+      const leaders = await pool.query(
+        `SELECT tm.user_id
+         FROM team_members tm
+         JOIN teams t ON t.id = tm.team_id
+         WHERE tm.team_id = $1
+           AND (tm.role = 'Lead' OR t.created_by = tm.user_id)
+           AND tm.user_id <> $2`,
+        [teamId, req.user.id]
+      );
+      for (const leader of leaders.rows) {
+        await createNotification(
+          leader.user_id,
+          'team_invite',
+          'Stand-up Blocker Reported',
+          `${req.user.name || req.user.email} reported a blocker in stand-up.`,
+          '/teams',
+          { teamId: Number(teamId), type: 'standup_blocker' }
+        );
+      }
+    }
+
+    res.status(201).json(upsert.rows[0]);
+  } catch (error) {
+    console.error('Create standup error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Course + grade tracking
+app.get('/api/courses', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT c.*,
+              COUNT(g.id)::int AS grade_items_count
+       FROM courses c
+       LEFT JOIN grade_items g ON g.course_id = c.id
+       WHERE c.user_id = $1
+       GROUP BY c.id
+       ORDER BY c.created_at DESC`,
+      [req.user.id]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Get courses error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/courses', authenticateToken, async (req, res) => {
+  try {
+    const { name, code, semester, targetGrade, credits } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ error: 'Course name is required' });
+    const result = await pool.query(
+      `INSERT INTO courses (user_id, name, code, semester, target_grade, credits)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [
+        req.user.id,
+        name.trim(),
+        code?.trim() || null,
+        semester?.trim() || null,
+        targetGrade || 85,
+        credits || 3
+      ]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Create course error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.put('/api/courses/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const ownership = await pool.query('SELECT id FROM courses WHERE id = $1 AND user_id = $2', [id, req.user.id]);
+    if (ownership.rows.length === 0) return res.status(404).json({ error: 'Course not found' });
+
+    const { name, code, semester, targetGrade, credits } = req.body;
+    const result = await pool.query(
+      `UPDATE courses
+       SET name = COALESCE($1, name),
+           code = COALESCE($2, code),
+           semester = COALESCE($3, semester),
+           target_grade = COALESCE($4, target_grade),
+           credits = COALESCE($5, credits),
+           updated_at = NOW()
+       WHERE id = $6 AND user_id = $7
+       RETURNING *`,
+      [name, code, semester, targetGrade, credits, id, req.user.id]
+    );
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Update course error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.delete('/api/courses/:id', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'DELETE FROM courses WHERE id = $1 AND user_id = $2 RETURNING id',
+      [req.params.id, req.user.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Course not found' });
+    res.json({ message: 'Course deleted' });
+  } catch (error) {
+    console.error('Delete course error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.get('/api/courses/:courseId/grades', authenticateToken, async (req, res) => {
+  try {
+    const ownership = await pool.query(
+      'SELECT id FROM courses WHERE id = $1 AND user_id = $2',
+      [req.params.courseId, req.user.id]
+    );
+    if (ownership.rows.length === 0) return res.status(404).json({ error: 'Course not found' });
+    const result = await pool.query(
+      'SELECT * FROM grade_items WHERE course_id = $1 ORDER BY created_at DESC',
+      [req.params.courseId]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Get grades error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/courses/:courseId/grades', authenticateToken, async (req, res) => {
+  try {
+    const ownership = await pool.query(
+      'SELECT id FROM courses WHERE id = $1 AND user_id = $2',
+      [req.params.courseId, req.user.id]
+    );
+    if (ownership.rows.length === 0) return res.status(404).json({ error: 'Course not found' });
+
+    const { title, category, weight, maxScore, score, dueDate } = req.body;
+    if (!title || !title.trim()) return res.status(400).json({ error: 'Title is required' });
+    if (weight === undefined || weight === null) return res.status(400).json({ error: 'Weight is required' });
+
+    const result = await pool.query(
+      `INSERT INTO grade_items (course_id, title, category, weight, max_score, score, due_date)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [
+        req.params.courseId,
+        title.trim(),
+        category?.trim() || null,
+        weight,
+        maxScore || 100,
+        score ?? null,
+        dueDate || null
+      ]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Create grade item error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.put('/api/grades/:id', authenticateToken, async (req, res) => {
+  try {
+    const ownership = await pool.query(
+      `SELECT g.id
+       FROM grade_items g
+       JOIN courses c ON c.id = g.course_id
+       WHERE g.id = $1 AND c.user_id = $2`,
+      [req.params.id, req.user.id]
+    );
+    if (ownership.rows.length === 0) return res.status(404).json({ error: 'Grade item not found' });
+
+    const { title, category, weight, maxScore, score, dueDate } = req.body;
+    const result = await pool.query(
+      `UPDATE grade_items
+       SET title = COALESCE($1, title),
+           category = COALESCE($2, category),
+           weight = COALESCE($3, weight),
+           max_score = COALESCE($4, max_score),
+           score = $5,
+           due_date = $6,
+           updated_at = NOW()
+       WHERE id = $7
+       RETURNING *`,
+      [title, category, weight, maxScore, score ?? null, dueDate || null, req.params.id]
+    );
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Update grade item error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.delete('/api/grades/:id', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `DELETE FROM grade_items g
+       USING courses c
+       WHERE g.course_id = c.id
+         AND g.id = $1
+         AND c.user_id = $2
+       RETURNING g.id`,
+      [req.params.id, req.user.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Grade item not found' });
+    res.json({ message: 'Grade item deleted' });
+  } catch (error) {
+    console.error('Delete grade item error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.get('/api/courses/:courseId/projection', authenticateToken, async (req, res) => {
+  try {
+    const courseResult = await pool.query(
+      'SELECT * FROM courses WHERE id = $1 AND user_id = $2',
+      [req.params.courseId, req.user.id]
+    );
+    if (courseResult.rows.length === 0) return res.status(404).json({ error: 'Course not found' });
+
+    const gradeRows = await pool.query(
+      `SELECT weight, score, max_score
+       FROM grade_items
+       WHERE course_id = $1`,
+      [req.params.courseId]
+    );
+
+    const course = courseResult.rows[0];
+    let completedWeight = 0;
+    let earnedWeighted = 0;
+
+    for (const item of gradeRows.rows) {
+      const w = Number(item.weight || 0);
+      if (item.score === null || item.score === undefined) continue;
+      const max = Number(item.max_score || 100) || 100;
+      const ratio = Math.max(0, Math.min(1, Number(item.score) / max));
+      completedWeight += w;
+      earnedWeighted += ratio * w;
+    }
+
+    const currentAverage = completedWeight > 0 ? (earnedWeighted / completedWeight) * 100 : 0;
+    const projectedFinal = completedWeight > 0 ? earnedWeighted + ((100 - completedWeight) * (currentAverage / 100)) : 0;
+    const targetGrade = Number(course.target_grade || 85);
+    const remainingWeight = Math.max(0, 100 - completedWeight);
+    const neededForTarget = remainingWeight > 0
+      ? ((targetGrade - earnedWeighted) / remainingWeight) * 100
+      : targetGrade;
+
+    res.json({
+      courseId: course.id,
+      targetGrade,
+      completedWeight: Number(completedWeight.toFixed(2)),
+      currentAverage: Number(currentAverage.toFixed(2)),
+      projectedFinal: Number(projectedFinal.toFixed(2)),
+      neededAverageOnRemaining: Number(neededForTarget.toFixed(2))
+    });
+  } catch (error) {
+    console.error('Course projection error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // ==================== HEALTH & SERVER ====================
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    message: 'Server is running', 
+  res.json({
+    status: 'OK',
+    message: 'Server is running',
     port: PORT,
     emailConfigured,
     googleOAuthEnabled: GOOGLE_OAUTH_ENABLED
@@ -2273,6 +3185,13 @@ setTimeout(() => {
 setInterval(() => {
   sendDeadlineReminders();
 }, 60 * 60 * 1000);
+
+setTimeout(() => {
+  sendStalledTaskNudges();
+}, 20000);
+setInterval(() => {
+  sendStalledTaskNudges();
+}, 6 * 60 * 60 * 1000);
 
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {

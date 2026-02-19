@@ -1,6 +1,7 @@
 // client/src/pages/Teams.jsx - LOOMIO-STYLE UI VERSION
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import axios from 'axios';
 import Sidebar from '../components/Sidebar';
 import Toast from '../components/Toast';
 import { FaPlus, FaTimes, FaTrash, FaEdit, FaUsers, FaTasks, FaChartLine, FaComment, FaUserPlus, FaEllipsisH, FaSearch } from 'react-icons/fa';
@@ -71,6 +72,9 @@ function Teams() {
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [joinLoading, setJoinLoading] = useState(false);
+  const [standupsByTeam, setStandupsByTeam] = useState({});
+  const [standupFormByTeam, setStandupFormByTeam] = useState({});
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -255,7 +259,49 @@ function Teams() {
   };
 
   const toggleExpandTeam = (teamId) => {
-    setExpandedTeam(expandedTeam === teamId ? null : teamId);
+    const next = expandedTeam === teamId ? null : teamId;
+    setExpandedTeam(next);
+    if (next) {
+      loadStandups(next);
+    }
+  };
+
+  const loadStandups = async (teamId) => {
+    try {
+      const token = localStorage.getItem('campusToken');
+      const response = await axios.get(`${API_URL}/teams/${teamId}/standups/today`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setStandupsByTeam(prev => ({ ...prev, [teamId]: response.data }));
+    } catch (error) {
+      console.error('Load standups error:', error);
+    }
+  };
+
+  const submitStandup = async (teamId) => {
+    const current = standupFormByTeam[teamId] || { planToday: '', blockers: '' };
+    if (!current.planToday?.trim()) {
+      addToast('Stand-up plan is required', 'error');
+      return;
+    }
+    try {
+      const token = localStorage.getItem('campusToken');
+      await axios.post(`${API_URL}/teams/${teamId}/standups`, {
+        planToday: current.planToday,
+        blockers: current.blockers
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      addToast('Stand-up saved for today', 'success');
+      setStandupFormByTeam(prev => ({
+        ...prev,
+        [teamId]: { planToday: '', blockers: '' }
+      }));
+      await loadStandups(teamId);
+    } catch (error) {
+      console.error('Submit standup error:', error);
+      addToast(error.response?.data?.error || 'Failed to submit stand-up', 'error');
+    }
   };
 
   useEffect(() => {
@@ -593,6 +639,74 @@ function Teams() {
                         </div>
                       )
                     }
+
+                    <div className="team-join-requests">
+                      <div className="join-requests-header">
+                        <span>Daily Stand-up</span>
+                        <span className="join-requests-count">
+                          {(standupsByTeam[team.id] || []).length}
+                        </span>
+                      </div>
+                      <div className="form-group" style={{ marginBottom: '10px' }}>
+                        <label>What will you do today?</label>
+                        <input
+                          type="text"
+                          placeholder="Plan for today"
+                          value={standupFormByTeam[team.id]?.planToday || ''}
+                          onChange={(e) => setStandupFormByTeam(prev => ({
+                            ...prev,
+                            [team.id]: {
+                              ...(prev[team.id] || { blockers: '' }),
+                              planToday: e.target.value
+                            }
+                          }))}
+                        />
+                      </div>
+                      <div className="form-group" style={{ marginBottom: '10px' }}>
+                        <label>Any blockers?</label>
+                        <input
+                          type="text"
+                          placeholder="Blockers (optional)"
+                          value={standupFormByTeam[team.id]?.blockers || ''}
+                          onChange={(e) => setStandupFormByTeam(prev => ({
+                            ...prev,
+                            [team.id]: {
+                              ...(prev[team.id] || { planToday: '' }),
+                              blockers: e.target.value
+                            }
+                          }))}
+                        />
+                      </div>
+                      <div className="join-request-actions">
+                        <button
+                          className="btn btn-secondary btn-small"
+                          onClick={() => submitStandup(team.id)}
+                        >
+                          Submit Stand-up
+                        </button>
+                        <button
+                          className="btn btn-secondary btn-small"
+                          onClick={() => loadStandups(team.id)}
+                        >
+                          Refresh
+                        </button>
+                      </div>
+                      {(standupsByTeam[team.id] || []).length > 0 && (
+                        <div className="join-requests-list">
+                          {(standupsByTeam[team.id] || []).slice(0, 4).map((entry) => (
+                            <div key={entry.id} className="join-request-item">
+                              <div className="join-request-info">
+                                <div className="join-request-name">{entry.name}</div>
+                                <div className="join-request-email">{entry.plan_today}</div>
+                                {entry.blockers && (
+                                  <div className="join-request-email">Blocker: {entry.blockers}</div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })}
