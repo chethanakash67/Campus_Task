@@ -20,9 +20,12 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 app.use(cors({
   origin: [
     FRONTEND_URL,
+    'http://localhost:5173',
     'http://localhost:5174',
     'http://localhost:3000',
-    'http://localhost:5176'
+    'http://localhost:5176',
+    'https://campustasks.vercel.app',
+    'https://campustask.vercel.app' // User specific domain
   ],
   credentials: true
 }));
@@ -33,7 +36,10 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'your_session_secret',
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: process.env.NODE_ENV === 'production' }
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax' // Important for cross-site cookies
+  }
 }));
 
 app.use(passport.initialize());
@@ -95,10 +101,44 @@ pool.on('error', (err) => {
   process.exit(-1);
 });
 
+// Helper to initialize DB if empty
+const fs = require('fs');
+const path = require('path');
+
+async function initializeDatabase(client) {
+  try {
+    // Check if users table exists
+    const checkTable = await client.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'users'
+      );
+    `);
+
+    if (!checkTable.rows[0].exists) {
+      console.log('⚠️  Database appears empty. Initializing schema...');
+      const schemaPath = path.join(__dirname, 'db', 'schema.sql');
+      const schemaSql = fs.readFileSync(schemaPath, 'utf8');
+
+      await client.query(schemaSql);
+      console.log('✅ Database initialized using schema.sql');
+      return true; // Indicates we just initialized
+    }
+    return false; // Already existed
+  } catch (error) {
+    console.error('❌ Error initializing database:', error.message);
+    return false;
+  }
+}
+
 // Test database connection and run migrations
 pool.connect()
   .then(async (client) => {
     console.log('✅ Database connection successful');
+
+    // Auto-initialize if empty
+    await initializeDatabase(client);
 
     // Run migration to add completed_late status
     try {
