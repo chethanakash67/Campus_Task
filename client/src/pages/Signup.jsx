@@ -17,6 +17,10 @@ function Signup() {
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
+  const handleGoogleSignup = () => {
+    window.location.href = API_URL.replace('/api', '') + '/api/auth/google';
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -211,6 +215,37 @@ function Signup() {
                 {loading ? 'Creating account...' : 'Create Account'}
               </button>
             </form>
+
+            <div className="auth-divider">
+              <span>or</span>
+            </div>
+
+            <button
+              type="button"
+              className="auth-google-btn"
+              onClick={handleGoogleSignup}
+              disabled={loading}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.38-1.04 2.55-2.22 3.34v2.77h3.6c2.1-1.94 3.3-4.8 3.3-8.12z"
+                  fill="#4285F4"
+                />
+                <path
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.64l-3.6-2.77c-.99.66-2.26 1.06-3.68 1.06-2.83 0-5.22-1.91-6.08-4.47H2.2v2.84C4.01 20.62 7.7 23 12 23z"
+                  fill="#34A853"
+                />
+                <path
+                  d="M5.92 14.18A6.98 6.98 0 0 1 5.58 12c0-.76.14-1.5.34-2.18V6.98H2.2A10.99 10.99 0 0 0 1 12c0 1.77.42 3.45 1.2 5.02l3.72-2.84z"
+                  fill="#FBBC05"
+                />
+                <path
+                  d="M12 5.35c1.62 0 3.06.56 4.2 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 4.01 3.38 2.2 6.98l3.72 2.84c.86-2.56 3.25-4.47 6.08-4.47z"
+                  fill="#EA4335"
+                />
+              </svg>
+              Continue with Google
+            </button>
 
             <div className="auth-footer">
               Already have an account?

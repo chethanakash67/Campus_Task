@@ -10,11 +10,16 @@ const nodemailer = require('nodemailer');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const session = require('express-session');
-require('dotenv').config();
+const path = require('path');
+
+// Always load env from server/.env regardless of where node is launched from.
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const app = express();
 const PORT = process.env.PORT || 5001;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+const BACKEND_BASE_URL = (process.env.BACKEND_URL || `http://localhost:${PORT}`).trim().replace(/\/+$/, '');
+const GOOGLE_CALLBACK_URL = (process.env.GOOGLE_CALLBACK_URL || `${BACKEND_BASE_URL}/api/auth/google/callback`).trim();
 
 // ==================== MIDDLEWARE ====================
 app.use(cors({
@@ -128,7 +133,6 @@ pool.on('error', (err) => {
 
 // Helper to initialize DB if empty
 const fs = require('fs');
-const path = require('path');
 
 async function initializeDatabase(client) {
   try {
@@ -422,15 +426,17 @@ pool.connect()
   });
 
 // ==================== PASSPORT GOOGLE OAUTH ====================
-const GOOGLE_OAUTH_ENABLED = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || '').trim();
+const GOOGLE_CLIENT_SECRET = (process.env.GOOGLE_CLIENT_SECRET || '').trim();
+const GOOGLE_OAUTH_ENABLED = !!(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET);
 
 if (GOOGLE_OAUTH_ENABLED) {
   console.log('✅ Google OAuth is enabled');
 
   passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: `${process.env.BACKEND_URL || 'http://localhost:5001'}/api/auth/google/callback`
+    clientID: GOOGLE_CLIENT_ID,
+    clientSecret: GOOGLE_CLIENT_SECRET,
+    callbackURL: GOOGLE_CALLBACK_URL
   },
     async (accessToken, refreshToken, profile, done) => {
       try {
@@ -1421,10 +1427,16 @@ app.post('/api/auth/resend-otp', async (req, res) => {
 
 // Google OAuth
 if (GOOGLE_OAUTH_ENABLED) {
-  app.get('/api/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+  app.get('/api/auth/google', passport.authenticate('google', {
+    scope: ['profile', 'email'],
+    callbackURL: GOOGLE_CALLBACK_URL
+  }));
 
   app.get('/api/auth/google/callback',
-    passport.authenticate('google', { failureRedirect: `${FRONTEND_URL}/login` }),
+    passport.authenticate('google', {
+      failureRedirect: `${FRONTEND_URL}/login`,
+      callbackURL: GOOGLE_CALLBACK_URL
+    }),
     (req, res) => {
       const token = jwt.sign({ id: req.user.id, email: req.user.email }, process.env.JWT_SECRET || 'your_jwt_secret_key');
       res.redirect(`${FRONTEND_URL}/auth-success?token=${token}`);
@@ -3231,7 +3243,16 @@ app.get('/health', (req, res) => {
     message: 'Server is running',
     port: PORT,
     emailConfigured,
-    googleOAuthEnabled: GOOGLE_OAUTH_ENABLED
+    googleOAuthEnabled: GOOGLE_OAUTH_ENABLED,
+    googleOAuthCallbackUrl: GOOGLE_CALLBACK_URL
+  });
+});
+
+app.get('/api/debug/google-oauth', (req, res) => {
+  res.json({
+    googleOAuthEnabled: GOOGLE_OAUTH_ENABLED,
+    backendBaseUrl: BACKEND_BASE_URL,
+    callbackUrl: GOOGLE_CALLBACK_URL
   });
 });
 
