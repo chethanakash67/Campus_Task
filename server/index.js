@@ -541,8 +541,8 @@ async function getCompleteTask(taskId) {
     SELECT t.*, 
       creator.name as creator_name,
       team.name as team_name,
-      c.name as course_name,
-      c.semester as course_semester,
+      course.name as course_name,
+      course.semester as course_semester,
       COALESCE(
         json_agg(DISTINCT jsonb_build_object(
           'id', u.id,
@@ -566,26 +566,26 @@ async function getCompleteTask(taskId) {
       ) as subtasks,
       COALESCE(
         json_agg(DISTINCT jsonb_build_object(
-          'id', c.id,
+          'id', comment.id,
           'author', cu.name,
           'authorId', cu.id,
-          'text', c.text,
-          'timestamp', c.created_at
-        )) FILTER (WHERE c.id IS NOT NULL),
+          'text', comment.text,
+          'timestamp', comment.created_at
+        )) FILTER (WHERE comment.id IS NOT NULL),
         '[]'
       ) as comments
     FROM tasks t
     LEFT JOIN users creator ON t.created_by = creator.id
     LEFT JOIN teams team ON t.team_id = team.id
-    LEFT JOIN courses c ON t.course_id = c.id
+    LEFT JOIN courses course ON t.course_id = course.id
     LEFT JOIN task_assignees ta ON t.id = ta.task_id
     LEFT JOIN users u ON ta.user_id = u.id
     LEFT JOIN task_tags tt ON t.id = tt.task_id
     LEFT JOIN subtasks s ON t.id = s.task_id
-    LEFT JOIN comments c ON t.id = c.task_id
-    LEFT JOIN users cu ON c.user_id = cu.id
+    LEFT JOIN comments comment ON t.id = comment.task_id
+    LEFT JOIN users cu ON comment.user_id = cu.id
     WHERE t.id = $1
-    GROUP BY t.id, creator.name, team.name, c.name, c.semester
+    GROUP BY t.id, creator.name, team.name, course.name, course.semester
   `, [taskId]);
 
   if (!result.rows[0]) return null;
