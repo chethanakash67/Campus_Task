@@ -4,7 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import NotificationCenter from './NotificationCenter';
 import { MdDashboard, MdSettings, MdLogout, MdLeaderboard } from 'react-icons/md';
-import { FaUserFriends, FaCalendarAlt, FaTasks, FaTrophy, FaUser, FaChevronRight, FaBars } from 'react-icons/fa';
+import { FaUserFriends, FaCalendarAlt, FaTasks, FaTrophy, FaUser, FaChevronRight, FaBars, FaBolt } from 'react-icons/fa';
 import '../pages/Dashboard.css';
 
 function Sidebar() {
@@ -38,6 +38,7 @@ function Sidebar() {
     { path: '/tasks', icon: FaTasks, label: 'Tasks' },
     { path: '/calendar', icon: FaCalendarAlt, label: 'Calendar' },
     { path: '/leaderboard', icon: FaTrophy, label: 'Leaderboard' },
+    { path: '/productivity', icon: FaBolt, label: 'Productivity' },
     { path: '/profile', icon: FaUser, label: 'Profile' },
     { path: '/settings', icon: MdSettings, label: 'Settings' },
   ];

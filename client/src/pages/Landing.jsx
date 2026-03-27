@@ -10,10 +10,14 @@ import {
   Shield,
   BarChart3,
   Github,
-  Twitter,
   Linkedin,
   Sparkles,
+  Mail,
+  Phone,
+  Info,
+  CircleHelp,
 } from "lucide-react";
+import { useState } from "react";
 import "./Landing.css";
 
 // ==================== NAVBAR ====================
@@ -84,8 +88,8 @@ function Hero() {
 
 // ==================== STATS SECTION ====================
 const stats = [
-  { icon: Users, value: "10,000+", label: "Active Users", color: "accent" },
-  { icon: CheckCircle, value: "250,000+", label: "Tasks Completed", color: "green" },
+  { icon: Users, value: "2+", label: "Active Users", color: "accent" },
+  { icon: CheckCircle, value: "2+", label: "Tasks Completed", color: "green" },
   { icon: Clock, value: "45%", label: "Time Saved", color: "purple" },
   { icon: TrendingUp, value: "98%", label: "Success Rate", color: "pink" },
 ];
@@ -211,16 +215,16 @@ function CTASection() {
         
         <div className="landing-cta-features">
           <div className="landing-cta-feature">
-            <span className="landing-cta-dot" />
-            <span>No credit card required</span>
+            
+            
           </div>
           <div className="landing-cta-feature">
-            <span className="landing-cta-dot" />
-            <span>14-day free trial</span>
+            
+            
           </div>
           <div className="landing-cta-feature">
-            <span className="landing-cta-dot" />
-            <span>Cancel anytime</span>
+            
+            
           </div>
         </div>
       </div>
@@ -229,20 +233,41 @@ function CTASection() {
 }
 
 // ==================== FOOTER ====================
-const footerLinks = {
-  Product: ["Features", "Pricing", "Changelog", "Roadmap"],
-  Resources: ["Documentation", "API", "Guides", "Blog"],
-  Company: ["About", "Careers", "Press", "Contact"],
-  Legal: ["Privacy", "Terms", "Security", "Cookies"],
-};
-
 const socialLinks = [
-  { icon: Twitter, label: "Twitter" },
-  { icon: Github, label: "GitHub" },
-  { icon: Linkedin, label: "LinkedIn" },
+  { icon: Github, label: "GitHub", href: "https://github.com/chethanakash67" },
+  { icon: Linkedin, label: "LinkedIn", href: "https://www.linkedin.com/in/chethan-akash" },
+];
+
+const footerSections = [
+  {
+    title: "Contact",
+    icon: Phone,
+    items: [
+      { label: "Phone", value: "8919870959", href: "tel:8919870959" },
+      { label: "Email", value: "chethanakash67@gmail.com", href: "mailto:chethanakash67@gmail.com" },
+      ],
+  },
+  {
+    title: "About",
+    icon: Info,
+    items: [
+      { label: "What is CampusTasks?", value: "A student-focused task manager for tracking assignments, deadlines, and team work in one clean workspace." },
+      { label: "Who is it for?", value: "Built for students, project teams, and anyone who wants a simple way to stay organized during the semester." },
+    ],
+  },
+  {
+    title: "Help",
+    icon: CircleHelp,
+    items: [
+      { label: "Need help?", value: "Use the contact details here for questions, project feedback, or collaboration." },
+      { label: "Best way to reach out", value: "Email is best for detailed queries. Phone is useful for quick contact." },
+    ],
+  },
 ];
 
 function Footer() {
+  const [activeSection, setActiveSection] = useState(footerSections[0]);
+
   return (
     <footer className="landing-footer">
       <div className="landing-footer-inner">
@@ -257,13 +282,15 @@ function Footer() {
               </span>
             </Link>
             <p>
-              The ultimate task management tool designed for students and remote teams.
+              A simple task management workspace for students who want clarity, deadlines, and better collaboration.
             </p>
             <div className="landing-footer-social">
               {socialLinks.map((social, index) => (
                 <a 
                   key={index} 
-                  href="#" 
+                  href={social.href}
+                  target="_blank"
+                  rel="noreferrer"
                   aria-label={social.label} 
                   className="landing-footer-social-link"
                 >
@@ -273,18 +300,51 @@ function Footer() {
             </div>
           </div>
 
-          {Object.entries(footerLinks).map(([category, links]) => (
-            <div key={category} className="landing-footer-column">
-              <h4>{category}</h4>
-              <ul>
-                {links.map((link) => (
-                  <li key={link}>
-                    <a href="#">{link}</a>
-                  </li>
-                ))}
-              </ul>
+          <div className="landing-footer-details">
+            <div className="landing-footer-options">
+              {footerSections.map((section) => (
+                <button
+                  key={section.title}
+                  type="button"
+                  className={`landing-footer-option${activeSection.title === section.title ? " active" : ""}`}
+                  onClick={() => setActiveSection(section)}
+                >
+                  <span className="landing-footer-option-title">
+                    <section.icon size={16} />
+                    {section.title}
+                  </span>
+                </button>
+              ))}
             </div>
-          ))}
+
+            <div className="landing-footer-card">
+              <div className="landing-footer-card-header">
+                <span className="landing-footer-card-icon">
+                  <activeSection.icon size={18} />
+                </span>
+                <h4>{activeSection.title}</h4>
+              </div>
+
+              <div className="landing-footer-card-body">
+                {activeSection.items.map((item) => (
+                  <div key={item.label} className="landing-footer-detail-item">
+                    <span className="landing-footer-detail-label">{item.label}</span>
+                    {item.href ? (
+                      <a
+                        href={item.href}
+                        target={item.href.startsWith("http") ? "_blank" : undefined}
+                        rel={item.href.startsWith("http") ? "noreferrer" : undefined}
+                      >
+                        {item.value}
+                      </a>
+                    ) : (
+                      <p>{item.value}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="landing-footer-bottom">

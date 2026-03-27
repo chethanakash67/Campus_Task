@@ -243,9 +243,11 @@ export const AppProvider = ({ children }) => {
       });
       setTasks([...tasks, response.data]);
       addToast('Task created successfully!', 'success');
+      return response.data;
     } catch (error) {
       console.error('Error adding task:', error);
-      addToast('Failed to create task', 'error');
+      addToast(error.response?.data?.error || 'Failed to create task', 'error');
+      throw error;
     }
   };
 

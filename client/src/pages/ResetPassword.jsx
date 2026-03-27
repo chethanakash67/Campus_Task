@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
-import { Lock, Eye, EyeOff, AlertCircle, ArrowLeft, CheckCircle, Users, Calendar, Clock } from 'lucide-react';
+import { Lock, AlertCircle, ArrowLeft, CheckCircle, Users, Calendar, Clock } from 'lucide-react';
+import { MdVisibility, MdVisibilityOff } from 'react-icons/md';
 import '../styles/auth.css';
 
 function ResetPassword() {
@@ -281,7 +282,7 @@ function ResetPassword() {
                   onClick={() => setShowPassword(!showPassword)}
                   tabIndex={-1}
                 >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  {showPassword ? <MdVisibilityOff size={18} /> : <MdVisibility size={18} />}
                 </button>
               </div>
               {passwordStrength && (
@@ -318,7 +319,7 @@ function ResetPassword() {
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   tabIndex={-1}
                 >
-                  {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  {showConfirmPassword ? <MdVisibilityOff size={18} /> : <MdVisibility size={18} />}
                 </button>
               </div>
             </div>

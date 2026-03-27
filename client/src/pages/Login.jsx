@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useApp } from '../context/AppContext';
 import axios from 'axios';
-import { Mail, Lock, Eye, EyeOff, AlertCircle, ArrowLeft } from 'lucide-react';
+import { AlertCircle, ArrowLeft } from 'lucide-react';
+import { MdVisibility, MdVisibilityOff } from 'react-icons/md';
+import { useApp } from '../context/AppContext';
 import '../styles/auth.css';
 
 function Login() {
@@ -35,9 +36,9 @@ function Login() {
     try {
       setLoading(true);
 
-      const response = await axios.post(API_URL + '/auth/login', {
-        email: email,
-        password: password
+      const response = await axios.post(`${API_URL}/auth/login`, {
+        email,
+        password,
       });
 
       localStorage.setItem('campusToken', response.data.token);
@@ -48,9 +49,9 @@ function Login() {
       if (pendingInvitation) {
         try {
           const inviteResponse = await axios.post(
-            API_URL + '/teams/accept-invitation',
+            `${API_URL}/teams/accept-invitation`,
             { token: pendingInvitation, userId: response.data.user.id },
-            { headers: { Authorization: 'Bearer ' + response.data.token } }
+            { headers: { Authorization: `Bearer ${response.data.token}` } }
           );
 
           localStorage.removeItem('pendingInvitation');
@@ -75,141 +76,46 @@ function Login() {
   };
 
   const handleGoogleLogin = () => {
-    window.location.href = API_URL.replace('/api', '') + '/api/auth/google';
+    window.location.href = `${API_URL.replace('/api', '')}/api/auth/google`;
   };
 
   return (
     <div className="auth-page">
-      <div className="auth-split-container">
-        {/* Left Side - Brand & Info */}
-        <div className="auth-left">
-          <div className="auth-left-content">
-            <h1>CampusTasks</h1>
-            <p style={{ marginBottom: '24px' }}>
-              Your all-in-one platform for managing academic projects,
-              coordinating with teams, and staying top of your assignments.
+      <div className="auth-layout">
+        <section className="auth-hero-panel">
+          <div className="auth-hero-copy">
+            <Link to="/" className="auth-hero-back">
+              <ArrowLeft size={16} />
+              Back
+            </Link>
+            <Link to="/" className="auth-brand">
+              Campus Tasks
+            </Link>
+            <div className="auth-hero-text">
+              <h1>Manage Tasks.</h1>
+              <h1>Ace Your Semester.</h1>
+            </div>
+            <p>
+              The modern task management platform built for students and teams.
+              Organize assignments, track deadlines, and collaborate seamlessly.
             </p>
-
-            <ul style={{ listStyle: 'none', padding: 0, textAlign: 'left', display: 'inline-block' }}>
-              <li style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ background: 'rgba(17, 24, 39, 0.1)', padding: '5px', borderRadius: '50%' }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#111827" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg>
-                </div>
-                Manage Tasks & Deadlines
-              </li>
-              <li style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ background: 'rgba(17, 24, 39, 0.1)', padding: '5px', borderRadius: '50%' }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#111827" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg>
-                </div>
-                Collaborate with Teams
-              </li>
-              <li style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ background: 'rgba(17, 24, 39, 0.1)', padding: '5px', borderRadius: '50%' }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#111827" strokeWidth="2"><polyline points="20 6 9 17 4 12" /></svg>
-                </div>
-                Track Progress Visualizations
-              </li>
-            </ul>
-
-            {/* Minimal SVG Illustration */}
-            <svg
-              viewBox="0 0 400 300"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              style={{ width: '100%', marginTop: '40px', opacity: 0.8 }}
-            >
-              <rect x="50" y="50" width="300" height="200" rx="20" fill="url(#paint0_linear)" fillOpacity="0.1" stroke="url(#paint0_linear)" strokeWidth="2" />
-              <circle cx="350" cy="50" r="20" fill="#000000" fillOpacity="0.1" />
-              <circle cx="50" cy="250" r="30" fill="#000000" fillOpacity="0.1" />
-              <path d="M100 120H300" stroke="rgba(0,0,0,0.2)" strokeWidth="10" strokeLinecap="round" />
-              <path d="M100 160H250" stroke="rgba(0,0,0,0.2)" strokeWidth="10" strokeLinecap="round" />
-              <path d="M100 200H200" stroke="rgba(0,0,0,0.2)" strokeWidth="10" strokeLinecap="round" />
-              <defs>
-                <linearGradient id="paint0_linear" x1="50" y1="50" x2="350" y2="250" gradientUnits="userSpaceOnUse">
-                  <stop stopColor="#94a3b8" />
-                  <stop offset="1" stopColor="#cbd5e1" />
-                </linearGradient>
-              </defs>
-            </svg>
           </div>
-        </div>
+        </section>
 
-        {/* Right Side - Login Form */}
-        <div className="auth-right">
-          <div className="auth-form-wrapper">
-            <div className="auth-header">
-              <Link to="/" className="auth-logo">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                  <polyline points="22 4 12 14.01 9 11.01"></polyline>
-                </svg>
-              </Link>
-              <h1 className="auth-title">Welcome back</h1>
+        <section className="auth-form-panel">
+          <div className="auth-form-shell">
+            <header className="auth-header auth-header-compact">
+              <h2 className="auth-title">Welcome Back</h2>
               <p className="auth-subtitle">
                 {localStorage.getItem('pendingInvitation')
-                  ? 'Sign in to accept your invitation'
-                  : 'Sign in to access your workspace'}
+                  ? 'Sign In to accept your invitation'
+                  : 'Sign In to your account to continue'}
               </p>
-            </div>
-
-            <form onSubmit={handleSubmit} className="auth-form">
-              {error && (
-                <div className="auth-alert auth-alert-error">
-                  <AlertCircle size={16} />
-                  {error}
-                </div>
-              )}
-
-              <div className="form-group">
-                <label>Email</label>
-                <div className="input-wrapper">
-                  <input
-                    type="email"
-                    className="auth-input"
-                    placeholder="Enter your email"
-                    value={email}
-                    onChange={(e) => { setEmail(e.target.value); setError(''); }}
-                    disabled={loading}
-                  />
-                  <Mail className="input-icon" size={18} />
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label>Password</label>
-                <div className="input-wrapper has-right-action">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    className="auth-input"
-                    placeholder="Enter your password"
-                    value={password}
-                    onChange={(e) => { setPassword(e.target.value); setError(''); }}
-                    disabled={loading}
-                  />
-                  <Lock className="input-icon" size={18} />
-                  <button
-                    type="button"
-                    className="password-toggle"
-                    onClick={() => setShowPassword(!showPassword)}
-                  >
-                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
-                <Link to="/forgot-password" className="forgot-password-link">Forgot password?</Link>
-              </div>
-
-              <button type="submit" className="auth-btn" disabled={loading}>
-                {loading ? 'Signing in...' : 'Sign In'}
-              </button>
-            </form>
-
-            <div className="auth-divider">
-              <span>or</span>
-            </div>
+            </header>
 
             <button
               type="button"
-              className="auth-google-btn"
+              className="auth-google-btn auth-google-btn-muted"
               onClick={handleGoogleLogin}
               disabled={loading}
             >
@@ -234,18 +140,75 @@ function Login() {
               Continue with Google
             </button>
 
-            <div className="auth-footer">
-              Don't have an account?
-              <Link to="/signup" className="auth-link">Create one</Link>
+            <div className="auth-divider auth-divider-minimal">
+              <span>or</span>
             </div>
 
-            <div className="auth-back-row">
-              <Link to="/" className="auth-secondary-link">
-                <ArrowLeft size={14} /> Back to Home
-              </Link>
-            </div>
+            <form onSubmit={handleSubmit} className="auth-form auth-form-minimal">
+              {error && (
+                <div className="auth-alert auth-alert-error">
+                  <AlertCircle size={16} />
+                  {error}
+                </div>
+              )}
+
+              <label className="auth-field">
+                <span className="auth-label">Email</span>
+                <input
+                  type="email"
+                  className="auth-input auth-input-minimal"
+                  placeholder="Enter your Email"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setError('');
+                  }}
+                  disabled={loading}
+                />
+              </label>
+
+              <label className="auth-field">
+                <span className="auth-label">Password</span>
+                <div className="auth-password-wrapper">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    className="auth-input auth-input-minimal"
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      setError('');
+                    }}
+                    disabled={loading}
+                  />
+                  <button
+                    type="button"
+                    className="auth-password-toggle"
+                    onClick={() => setShowPassword((current) => !current)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <MdVisibilityOff size={18} /> : <MdVisibility size={18} />}
+                  </button>
+                </div>
+              </label>
+
+              <div className="auth-inline-row">
+                <span />
+                <Link to="/forgot-password" className="forgot-password-link">
+                  Forgot Password?
+                </Link>
+              </div>
+
+              <button type="submit" className="auth-btn auth-btn-minimal" disabled={loading}>
+                {loading ? 'Signing In...' : 'Sign In'}
+              </button>
+            </form>
+
+            <p className="auth-footer auth-footer-inline">
+              Don&apos;t have an account? <Link to="/signup" className="auth-link">Sign Up</Link>
+            </p>
           </div>
-        </div>
+        </section>
       </div>
     </div>
   );

@@ -5,12 +5,14 @@ import Toast from '../components/Toast';
 import TaskDetailDrawer from '../components/TaskDetailDrawer';
 import { useApp } from '../context/AppContext';
 import axios from 'axios';
-import { 
+import {
   FaSearch, FaSpinner, FaUsers, FaExclamationTriangle, FaEdit, FaTrash,
-  FaCalendarAlt, FaFlag, FaArrowRight, FaCheck, FaHourglass 
+  FaCalendarAlt, FaFlag, FaArrowRight, FaCheck, FaHourglass,
+  FaPlus, FaRegCommentDots, FaPaperclip, FaCheckCircle, FaListUl,
+  FaColumns, FaThList
 } from 'react-icons/fa';
-import { 
-  MdOutlineTaskAlt, MdPendingActions, MdPlayCircleOutline, 
+import {
+  MdOutlineTaskAlt, MdPendingActions, MdPlayCircleOutline,
   MdAssignment, MdWarning, MdAccessTime, MdPerson,
   MdGroup, MdSchedule, MdDone, MdError
 } from 'react-icons/md';
@@ -194,7 +196,7 @@ function AssignedTasks() {
     const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
     return diffDays >= 0 && diffDays <= days;
   };
-  
+
   const isTaskPending = (task) => {
     if (task.status === 'done' || task.status === 'completed_late') return false;
     return !isTaskOverdue(task);
@@ -211,7 +213,7 @@ function AssignedTasks() {
     const task = allTasks.find(t => t.id === taskId);
     let effectiveStatus = newStatus;
     const completionProgress = (newStatus === 'done') ? 100 : (task?.progress ?? 0);
-    
+
     if (newStatus === 'done' && task?.due_date) {
       const dueDate = new Date(task.due_date);
       dueDate.setHours(23, 59, 59, 999);
@@ -219,25 +221,25 @@ function AssignedTasks() {
         effectiveStatus = 'completed_late';
       }
     }
-    
-    setAssignedToMeTasks(prev => prev.map(t => 
+
+    setAssignedToMeTasks(prev => prev.map(t =>
       t.id === taskId ? { ...t, status: effectiveStatus, progress: completionProgress } : t
     ));
-    setCreatedByMeTasks(prev => prev.map(t => 
+    setCreatedByMeTasks(prev => prev.map(t =>
       t.id === taskId ? { ...t, status: effectiveStatus, progress: completionProgress } : t
     ));
-    
+
     try {
       const token = localStorage.getItem('campusToken');
-      const response = await axios.put(`${API_URL}/tasks/${taskId}`, 
+      const response = await axios.put(`${API_URL}/tasks/${taskId}`,
         { status: newStatus },
-        { headers: { Authorization: `Bearer ${token}` }}
+        { headers: { Authorization: `Bearer ${token}` } }
       );
-      
+
       const updatedTask = response.data;
       setAssignedToMeTasks(prev => prev.map(t => t.id === taskId ? updatedTask : t));
       setCreatedByMeTasks(prev => prev.map(t => t.id === taskId ? updatedTask : t));
-      
+
       if (response.data.status === 'completed_late') {
         addToast('Task marked as submitted late (past due date)', 'warning');
       } else {
@@ -342,7 +344,7 @@ function AssignedTasks() {
 
   const getGlobalFilteredTasks = useMemo(() => {
     let filtered = [];
-    
+
     switch (activeTab) {
       case 'all':
         filtered = allTasks;
@@ -368,9 +370,9 @@ function AssignedTasks() {
       default:
         filtered = allTasks;
     }
-    
+
     if (searchQuery) {
-      filtered = filtered.filter(task => 
+      filtered = filtered.filter(task =>
         task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (task.description && task.description.toLowerCase().includes(searchQuery.toLowerCase()))
       );
@@ -402,7 +404,7 @@ function AssignedTasks() {
     } else {
       filtered = [...filtered].sort((a, b) => safeUpdatedTime(b) - safeUpdatedTime(a));
     }
-    
+
     return filtered;
   }, [allTasks, assignedToMeTasks, createdByMeTasks, searchQuery, activeTab, sortBy, focusMode]);
 
@@ -494,7 +496,7 @@ function AssignedTasks() {
     <div className="dashboard-container">
       <Sidebar />
       <Toast toasts={toasts} removeToast={removeToast} />
-      
+
       <main className="main-content">
         <div className="page-header-card">
           <div className="page-header-content">
@@ -510,28 +512,28 @@ function AssignedTasks() {
 
         <div className="tasks-tabs-container">
           <div className="tasks-tabs">
-            <button 
+            <button
               className={`tasks-tab ${activeTab === 'all' ? 'active' : ''}`}
               onClick={() => setActiveTab('all')}
             >
               All Tasks
               <span className="tab-count">{stats.total}</span>
             </button>
-            <button 
+            <button
               className={`tasks-tab ${activeTab === 'assigned-to-me' ? 'active' : ''}`}
               onClick={() => setActiveTab('assigned-to-me')}
             >
               Assigned to Me
               <span className="tab-count">{stats.assignedToMe}</span>
             </button>
-            <button 
+            <button
               className={`tasks-tab ${activeTab === 'assigned-by-me' ? 'active' : ''}`}
               onClick={() => setActiveTab('assigned-by-me')}
             >
               Assigned Tasks
               <span className="tab-count">{stats.assignedByMe}</span>
             </button>
-            <button 
+            <button
               className={`tasks-tab ${activeTab === 'pending' ? 'active' : ''}`}
               onClick={() => setActiveTab('pending')}
             >
@@ -545,7 +547,7 @@ function AssignedTasks() {
               Due Soon
               <span className="tab-count">{stats.dueSoon}</span>
             </button>
-            <button 
+            <button
               className={`tasks-tab ${activeTab === 'completed' ? 'active' : ''}`}
               onClick={() => setActiveTab('completed')}
             >
@@ -553,7 +555,7 @@ function AssignedTasks() {
               <span className="tab-count">{stats.completedOnTime}</span>
             </button>
             {stats.overdue > 0 && (
-              <button 
+              <button
                 className={`tasks-tab overdue ${activeTab === 'overdue' ? 'active' : ''}`}
                 onClick={() => setActiveTab('overdue')}
               >
@@ -564,117 +566,6 @@ function AssignedTasks() {
             )}
           </div>
         </div>
-
-        <div className="focus-card">
-          <div className="focus-card-header">
-            <h3>Focus Timer (Pomodoro)</h3>
-            <span>{formatTimer(timerSeconds)}</span>
-          </div>
-          <div className="focus-card-controls">
-            <select
-              value={focusTaskId}
-              onChange={(e) => setFocusTaskId(e.target.value)}
-              className="tasks-sort-select"
-            >
-              <option value="">No task selected</option>
-              {allTasks
-                .filter(t => t.status !== 'done' && t.status !== 'completed_late')
-                .map(t => (
-                  <option key={t.id} value={t.id}>{t.title}</option>
-                ))}
-            </select>
-            <button
-              type="button"
-              className={`focus-mode-btn ${timerRunning ? 'active' : ''}`}
-              onClick={() => setTimerRunning(prev => !prev)}
-            >
-              {timerRunning ? 'Pause' : 'Start 25m'}
-            </button>
-            <button
-              type="button"
-              className="focus-mode-btn"
-              onClick={() => {
-                setTimerRunning(false);
-                setTimerSeconds(POMODORO_SECONDS);
-              }}
-            >
-              Reset
-            </button>
-          </div>
-          <div className="focus-card-meta">
-            <span>Task: {focusTask ? focusTask.title : 'General focus'}</span>
-            <span>Today: {todaysFocusSessions} session(s)</span>
-            <span>Streak: {focusStreak} day(s)</span>
-          </div>
-        </div>
-
-        <div className="focus-card">
-          <div className="focus-card-header">
-            <h3>Streaks & Badges</h3>
-            <span>{(gamification?.badges || []).length} badge(s)</span>
-          </div>
-          <div className="focus-card-meta">
-            <span>Current Streak: {gamification?.streak?.current_streak || 0} day(s)</span>
-            <span>Longest: {gamification?.streak?.longest_streak || 0} day(s)</span>
-            <span>On-Time Done: {gamification?.streak?.on_time_completions || 0}</span>
-          </div>
-          {(gamification?.badges || []).length > 0 && (
-            <div className="focus-card-meta">
-              {(gamification.badges || []).slice(0, 4).map(badge => (
-                <span key={badge.code}>{badge.name}</span>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="focus-card">
-          <div className="focus-card-header">
-            <h3>Smart Scheduling</h3>
-            <span>{smartSchedule.length} slots</span>
-          </div>
-          <div className="focus-card-controls">
-            <button
-              type="button"
-              className="focus-mode-btn"
-              onClick={() => generateSmartSchedule(false)}
-              disabled={scheduleLoading}
-            >
-              {scheduleLoading ? 'Planning...' : 'Preview 7-Day Plan'}
-            </button>
-            <button
-              type="button"
-              className="focus-mode-btn"
-              onClick={() => generateSmartSchedule(true)}
-              disabled={scheduleLoading}
-            >
-              Save Plan
-            </button>
-          </div>
-          <div className="focus-card-meta">
-            {(smartSchedule || []).slice(0, 4).map(slot => (
-              <span key={`${slot.taskId || slot.task_id}-${slot.plan_date}`}>
-                {new Date(slot.plan_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}: {slot.title} ({slot.planned_hours || slot.hours}h)
-              </span>
-            ))}
-            {smartSchedule.length === 0 && <span>No schedule yet</span>}
-          </div>
-        </div>
-
-        {stalledTasks.length > 0 && (
-          <div className="focus-card">
-            <div className="focus-card-header">
-              <h3>Stalled Task Nudges</h3>
-              <span>{stalledTasks.length}</span>
-            </div>
-            <div className="focus-card-meta">
-              {stalledTasks.slice(0, 4).map(task => (
-                <span key={task.id}>
-                  {task.title} ({task.stale_days}d inactive)
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
 
         <div className="assigned-filter-bar">
           <div className="search-input-wrapper">
@@ -721,47 +612,68 @@ function AssignedTasks() {
             </div>
           </div>
         ) : isKanbanView ? (
-          <div className="board-grid">
-            {['todo', 'in-progress', 'done'].map(status => {
-              const columnTasks = getColumnTasks(status);
-              return (
-                <div 
-                  className="board-column" 
-                  key={status}
-                  onDragOver={handleDragOver}
-                  onDrop={(e) => handleDrop(e, status)}
-                >
-                  <div className="column-header">
-                    <span className={`status-dot ${status === 'todo' ? 'grey' : status === 'in-progress' ? 'blue' : 'green'}`}></span>
-                    <h2>{status === 'todo' ? 'To Do' : status === 'in-progress' ? 'In Progress' : 'Done'}</h2>
-                    <span className="count">{columnTasks.length}</span>
-                  </div>
-                  <div className="task-list">
-                    {columnTasks.length === 0 ? (
-                      <div className="empty-state">
-                        <p>No tasks here</p>
-                        <span>Drag tasks to update status</span>
-                      </div>
-                    ) : (
-                      columnTasks.map(task => (
-                        <KanbanTaskCard 
-                          key={task.id} 
-                          task={task} 
-                          currentUser={currentUser}
-                          onDragStart={handleDragStart}
-                          onDragEnd={handleDragEnd}
-                          onClick={() => setSelectedTask(task)}
-                          onStatusChange={updateTaskStatus}
-                          onEdit={openEditModal}
-                          onDelete={deleteTask}
-                        />
-                      ))
+          <>
+            {/* Board Top Bar */}
+            <div className="board-top-bar">
+              <div className="board-top-bar-left">
+                <div className="board-view-toggles">
+                  <button className="board-view-btn active" title="Board view">
+                    <FaColumns /> Board
+                  </button>
+                  <button className="board-view-btn" title="List view" onClick={() => setActiveTab('all')}>
+                    <FaThList /> List
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="board-grid">
+              {['todo', 'in-progress', 'done'].map(status => {
+                const columnTasks = getColumnTasks(status);
+                return (
+                  <div
+                    className="board-column"
+                    key={status}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, status)}
+                  >
+                    <div className="column-header">
+                      <span className={`status-dot ${status === 'todo' ? 'grey' : status === 'in-progress' ? 'blue' : 'green'}`}></span>
+                      <h2>{status === 'todo' ? 'To Do' : status === 'in-progress' ? 'In Progress' : 'Done'}</h2>
+                      <span className="count">{columnTasks.length}</span>
+                    </div>
+                    <div className="task-list">
+                      {columnTasks.length === 0 ? (
+                        <div className="empty-state">
+                          <p>No tasks here</p>
+                          <span>Drag tasks to move them here</span>
+                        </div>
+                      ) : (
+                        columnTasks.map(task => (
+                          <KanbanTaskCard
+                            key={task.id}
+                            task={task}
+                            currentUser={currentUser}
+                            onDragStart={handleDragStart}
+                            onDragEnd={handleDragEnd}
+                            onClick={() => setSelectedTask(task)}
+                            onStatusChange={updateTaskStatus}
+                            onEdit={openEditModal}
+                            onDelete={deleteTask}
+                          />
+                        ))
+                      )}
+                    </div>
+                    {status !== 'done' && (
+                      <button className="column-add-task-btn" onClick={() => navigate('/dashboard')}>
+                        <FaPlus /> Add task
+                      </button>
                     )}
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          </>
         ) : (
           <div className="filtered-view-container">
             {filterViewInfo && (
@@ -789,7 +701,7 @@ function AssignedTasks() {
             ) : (
               <div className="filtered-task-list">
                 {getGlobalFilteredTasks.map(task => (
-                  <DetailedTaskCard 
+                  <DetailedTaskCard
                     key={task.id}
                     task={task}
                     currentUser={currentUser}
@@ -860,8 +772,8 @@ function AssignedTasks() {
         )}
 
         {selectedTask && (
-          <TaskDetailDrawer 
-            task={selectedTask} 
+          <TaskDetailDrawer
+            task={selectedTask}
             onClose={() => {
               setSelectedTask(null);
               fetchAllTasks();
@@ -880,44 +792,106 @@ function KanbanTaskCard({ task, currentUser, onDragStart, onDragEnd, onClick, on
   const isCompleted = task.status === 'done' || isCompletedLate;
   const canManage = task.created_by === currentUser?.id;
 
+  // Determine priority class for left-border accent
+  const priorityClass = isOverdue
+    ? 'overdue-card'
+    : isCompletedLate
+      ? 'late-submission-card'
+      : task.task_type === 'team'
+        ? 'team-task-card'
+        : `priority-${task.priority.toLowerCase()}`;
+
+  // Subtask count (simulated from checklist if available)
+  const subtaskCount = task.subtasks?.length || 0;
+  const subtaskDone = task.subtasks?.filter(s => s.completed)?.length || 0;
+
   return (
-    <div 
-      className={`task-card ${isOverdue ? 'overdue-card' : ''} ${isCompletedLate ? 'late-submission-card' : ''} ${task.task_type === 'team' ? 'team-task-card' : 'personal-task-card'}`}
+    <div
+      className={`task-card ${priorityClass}`}
       draggable
       onDragStart={(e) => onDragStart(e, task)}
       onDragEnd={onDragEnd}
       onClick={onClick}
     >
+      {/* Planner-style colored category labels */}
+      {task.tags && task.tags.length > 0 && (
+        <div className="planner-labels">
+          {task.tags.map((tag, idx) => (
+            <span
+              key={tag}
+              className={`planner-label planner-label-${idx % 6}`}
+              title={tag}
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Team badge */}
       {task.team_name && (
         <div className="task-type-badge">
           <FaUsers className="badge-icon" /> {task.team_name}
         </div>
       )}
 
+      {/* Late submission badge */}
       {isCompletedLate && (
         <div className="late-submission-badge">
           <MdWarning className="badge-icon" /> Submitted Late
         </div>
       )}
 
+      {/* Priority + Status row */}
       <div className="task-header">
         <span className={`priority-tag ${task.priority.toLowerCase()}`}>{task.priority}</span>
         {isCompleted && (
           <span className={`status-label ${isCompletedLate ? 'late' : 'on-time'}`}>
-            {isCompletedLate ? 'Late' : 'Completed'}
+            {isCompletedLate ? 'Late' : 'Done'}
           </span>
         )}
       </div>
-      
+
+      {/* Title */}
       <h3>{task.title}</h3>
-      
+
+      {/* Description excerpt */}
       {task.description && (
-        <p className="task-excerpt">{task.description.substring(0, 60)}...</p>
+        <p className="task-excerpt">{task.description.substring(0, 80)}{task.description.length > 80 ? '...' : ''}</p>
       )}
 
+      {/* Meta icons row (Planner-style) */}
+      <div className="card-meta-icons">
+        {task.due_date && (
+          <div className={`card-meta-item ${isOverdue ? 'overdue' : ''}`}>
+            <FaCalendarAlt />
+            <span>{new Date(task.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+          </div>
+        )}
+        {subtaskCount > 0 && (
+          <div className="card-meta-item">
+            <FaCheckCircle />
+            <span>{subtaskDone}/{subtaskCount}</span>
+          </div>
+        )}
+        {task.comments_count > 0 && (
+          <div className="card-meta-item">
+            <FaRegCommentDots />
+            <span>{task.comments_count}</span>
+          </div>
+        )}
+        {task.attachments_count > 0 && (
+          <div className="card-meta-item">
+            <FaPaperclip />
+            <span>{task.attachments_count}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Quick status buttons (hover-reveal) */}
       <div className="quick-status-buttons" onClick={(e) => e.stopPropagation()}>
         {task.status !== 'todo' && task.status !== 'completed_late' && (
-          <button 
+          <button
             className="status-btn todo"
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onStatusChange(task.id, 'todo'); }}
             title="Move to To Do"
@@ -926,7 +900,7 @@ function KanbanTaskCard({ task, currentUser, onDragStart, onDragEnd, onClick, on
           </button>
         )}
         {task.status !== 'in-progress' && task.status !== 'completed_late' && (
-          <button 
+          <button
             className="status-btn in-progress"
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onStatusChange(task.id, 'in-progress'); }}
             title="Move to In Progress"
@@ -935,7 +909,7 @@ function KanbanTaskCard({ task, currentUser, onDragStart, onDragEnd, onClick, on
           </button>
         )}
         {task.status !== 'done' && task.status !== 'completed_late' && (
-          <button 
+          <button
             className="status-btn done"
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onStatusChange(task.id, 'done'); }}
             title="Mark as Done"
@@ -945,11 +919,20 @@ function KanbanTaskCard({ task, currentUser, onDragStart, onDragEnd, onClick, on
         )}
       </div>
 
+      {/* Footer: Assignee avatars + Actions */}
       <div className="task-footer">
-        {task.due_date && (
-          <span className={`due-date ${isOverdue ? 'overdue' : ''} ${isCompletedLate ? 'late' : ''}`}>
-            {new Date(task.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-          </span>
+        {/* Assignee avatars (Planner-style) */}
+        {task.assignees && task.assignees.length > 0 && (
+          <div className="card-assignees">
+            {task.assignees.slice(0, 3).map((assignee, idx) => (
+              <div key={assignee.id || idx} className="card-assignee-avatar" title={assignee.name}>
+                {assignee.name?.charAt(0).toUpperCase() || 'U'}
+              </div>
+            ))}
+            {task.assignees.length > 3 && (
+              <div className="card-assignee-avatar" title={`${task.assignees.length - 3} more`}>+{task.assignees.length - 3}</div>
+            )}
+          </div>
         )}
         {canManage && (
           <div className="task-actions-inline" onClick={(e) => e.stopPropagation()}>
@@ -977,7 +960,7 @@ function KanbanTaskCard({ task, currentUser, onDragStart, onDragEnd, onClick, on
 function DetailedTaskCard({ task, currentUser, onClick, onStatusChange, getSubmissionStatus, onEdit, onDelete }) {
   const submissionStatus = getSubmissionStatus(task);
   const isCompleted = task.status === 'done' || task.status === 'completed_late';
-  
+
   const statusConfig = {
     pending: { label: 'Pending', icon: <FaHourglass />, className: 'status-pending' },
     completed: { label: 'Completed', icon: <FaCheck />, className: 'status-completed' },
@@ -995,6 +978,14 @@ function DetailedTaskCard({ task, currentUser, onClick, onStatusChange, getSubmi
       </div>
 
       <div className="task-main-content">
+        {/* Planner-style labels in list view */}
+        {task.tags && task.tags.length > 0 && (
+          <div className="planner-labels">
+            {task.tags.map((tag, idx) => (
+              <span key={tag} className={`planner-label planner-label-${idx % 6}`} title={tag}>{tag}</span>
+            ))}
+          </div>
+        )}
         <div className="task-top-row">
           <h3 className="task-title">{task.title}</h3>
           <span className={`priority-badge ${task.priority.toLowerCase()}`}>
@@ -1070,7 +1061,7 @@ function DetailedTaskCard({ task, currentUser, onClick, onStatusChange, getSubmi
 
         {!isCompleted && (
           <div className="quick-actions" onClick={(e) => e.stopPropagation()}>
-            <button 
+            <button
               className="action-btn complete"
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); onStatusChange(task.id, 'done'); }}
               title="Mark as Complete"
