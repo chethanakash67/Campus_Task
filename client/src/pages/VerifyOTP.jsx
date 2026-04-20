@@ -82,7 +82,7 @@ function VerifyOTP() {
       // Get stored password and name from signup
       const pendingPassword = localStorage.getItem('pendingPassword');
       const pendingName = localStorage.getItem('pendingName');
-
+//hello
       await axios.post(API_URL + '/auth/verify-register', {
         email: email,
         otp: otpValue,
