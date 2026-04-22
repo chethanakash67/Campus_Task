@@ -20,6 +20,11 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isSavingDetails, setIsSavingDetails] = useState(false);
   const [isDeletingTask, setIsDeletingTask] = useState(false);
+  const [noteText, setNoteText] = useState('');
+  const [isSavingNote, setIsSavingNote] = useState(false);
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+  const [deletingNoteId, setDeletingNoteId] = useState(null);
+  const [deletingAttachmentId, setDeletingAttachmentId] = useState(null);
   const [editedTask, setEditedTask] = useState({
     title: task?.title || '',
     description: task?.description || '',
@@ -38,6 +43,7 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
   const teamMembers = task?.teamId
     ? (teams.find(team => Number(team.id) === Number(task.teamId))?.members || [])
     : [];
+  const canContribute = isCreator || isAssigned;
 
   useEffect(() => {
     if (task?.id) {
@@ -89,7 +95,7 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
     setIsSubmitting(true);
     try {
       const token = localStorage.getItem('campusToken');
-      await axios.post(`${API_URL}/tasks/${task.id}/progress`, {
+      const response = await axios.post(`${API_URL}/tasks/${task.id}/progress`, {
         progress: progress,
         note: updateNote
       }, {
@@ -99,7 +105,7 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
       setUpdateNote('');
       fetchActivityLog();
       if (onTaskUpdate) {
-        onTaskUpdate({ ...task, progress });
+        onTaskUpdate(response.data);
       }
     } catch (error) {
       console.error('Error updating progress:', error);
@@ -214,6 +220,103 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
       // Toast handled in context
     } finally {
       setIsDeletingTask(false);
+    }
+  };
+
+  const formatFileSize = (fileSize = 0) => {
+    if (fileSize < 1024) return `${fileSize} B`;
+    if (fileSize < 1024 * 1024) return `${(fileSize / 1024).toFixed(1)} KB`;
+    return `${(fileSize / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const handleAddNote = async () => {
+    if (!noteText.trim()) return;
+
+    setIsSavingNote(true);
+    try {
+      const token = localStorage.getItem('campusToken');
+      const response = await axios.post(`${API_URL}/tasks/${task.id}/notes`, {
+        text: noteText.trim()
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setNoteText('');
+      addToast('Note added', 'success');
+      onTaskUpdate?.(response.data);
+    } catch (error) {
+      addToast(error.response?.data?.error || 'Failed to add note', 'error');
+    } finally {
+      setIsSavingNote(false);
+    }
+  };
+
+  const handleDeleteNote = async (noteId) => {
+    setDeletingNoteId(noteId);
+    try {
+      const token = localStorage.getItem('campusToken');
+      const response = await axios.delete(`${API_URL}/tasks/${task.id}/notes/${noteId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      addToast('Note removed', 'success');
+      onTaskUpdate?.(response.data);
+    } catch (error) {
+      addToast(error.response?.data?.error || 'Failed to remove note', 'error');
+    } finally {
+      setDeletingNoteId(null);
+    }
+  };
+
+  const handleAttachmentUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      addToast('Please upload files smaller than 5 MB', 'error');
+      event.target.value = '';
+      return;
+    }
+
+    setIsUploadingAttachment(true);
+    try {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const token = localStorage.getItem('campusToken');
+      const response = await axios.post(`${API_URL}/tasks/${task.id}/attachments`, {
+        fileName: file.name,
+        mimeType: file.type,
+        fileSize: file.size,
+        dataUrl
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      addToast('Attachment uploaded', 'success');
+      onTaskUpdate?.(response.data);
+    } catch (error) {
+      addToast(error.response?.data?.error || 'Failed to upload attachment', 'error');
+    } finally {
+      event.target.value = '';
+      setIsUploadingAttachment(false);
+    }
+  };
+
+  const handleDeleteAttachment = async (attachmentId) => {
+    setDeletingAttachmentId(attachmentId);
+    try {
+      const token = localStorage.getItem('campusToken');
+      const response = await axios.delete(`${API_URL}/tasks/${task.id}/attachments/${attachmentId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      addToast('Attachment removed', 'success');
+      onTaskUpdate?.(response.data);
+    } catch (error) {
+      addToast(error.response?.data?.error || 'Failed to remove attachment', 'error');
+    } finally {
+      setDeletingAttachmentId(null);
     }
   };
 
@@ -469,6 +572,131 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
                   </div>
                 </div>
               )}
+
+              <div className="detail-section">
+                <div className="section-heading-row">
+                  <h4 className="section-label">Notes</h4>
+                  <span className="section-count">{task.notes?.length || 0}</span>
+                </div>
+
+                {canContribute && (
+                  <div className="inline-compose-card">
+                    <textarea
+                      className="drawer-textarea"
+                      rows={3}
+                      placeholder="Add a task note..."
+                      value={noteText}
+                      onChange={(e) => setNoteText(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="detail-action-btn primary"
+                      onClick={handleAddNote}
+                      disabled={isSavingNote || !noteText.trim()}
+                    >
+                      {isSavingNote ? <FaSpinner className="spinner" /> : <FaSave />}
+                      Save Note
+                    </button>
+                  </div>
+                )}
+
+                {task.notes?.length ? (
+                  <div className="stack-list">
+                    {task.notes.map(note => {
+                      const canDeleteNote = Number(note.authorId) === Number(currentUser?.id) || isCreator;
+                      return (
+                        <div key={note.id} className="stack-card">
+                          <div className="stack-card-header">
+                            <div>
+                              <strong>{note.author || 'Unknown'}</strong>
+                              <span>{formatRelativeTime(note.timestamp)}</span>
+                            </div>
+                            {canDeleteNote && (
+                              <button
+                                type="button"
+                                className="icon-action-btn danger"
+                                onClick={() => handleDeleteNote(note.id)}
+                                disabled={deletingNoteId === note.id}
+                              >
+                                {deletingNoteId === note.id ? <FaSpinner className="spinner" /> : <FaTrash />}
+                              </button>
+                            )}
+                          </div>
+                          <p className="stack-card-text">{note.text}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="empty-inline-state">No notes yet.</p>
+                )}
+              </div>
+
+              <div className="detail-section">
+                <div className="section-heading-row">
+                  <h4 className="section-label">Attachments</h4>
+                  <span className="section-count">{task.attachments?.length || 0}</span>
+                </div>
+
+                {canContribute && (
+                  <div className="inline-compose-card">
+                    <label className="upload-field">
+                      <FaPaperclip />
+                      <span>{isUploadingAttachment ? 'Uploading...' : 'Upload file'}</span>
+                      <input
+                        type="file"
+                        onChange={handleAttachmentUpload}
+                        disabled={isUploadingAttachment}
+                      />
+                    </label>
+                    <p className="upload-hint">Supports quick uploads up to 5 MB.</p>
+                  </div>
+                )}
+
+                {task.attachments?.length ? (
+                  <div className="stack-list">
+                    {task.attachments.map(attachment => {
+                      const canDeleteAttachment = Number(attachment.uploadedById) === Number(currentUser?.id) || isCreator;
+                      return (
+                        <div key={attachment.id} className="stack-card attachment-card">
+                          <div className="stack-card-header">
+                            <div className="attachment-meta">
+                              <FaPaperclip />
+                              <div>
+                                <strong>{attachment.fileName}</strong>
+                                <span>
+                                  {attachment.uploadedBy || 'Unknown'} • {formatFileSize(attachment.fileSize)} • {formatRelativeTime(attachment.createdAt)}
+                                </span>
+                              </div>
+                            </div>
+                            {canDeleteAttachment && (
+                              <button
+                                type="button"
+                                className="icon-action-btn danger"
+                                onClick={() => handleDeleteAttachment(attachment.id)}
+                                disabled={deletingAttachmentId === attachment.id}
+                              >
+                                {deletingAttachmentId === attachment.id ? <FaSpinner className="spinner" /> : <FaTrash />}
+                              </button>
+                            )}
+                          </div>
+                          <a
+                            className="attachment-link"
+                            href={attachment.dataUrl}
+                            download={attachment.fileName}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Open or download
+                          </a>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="empty-inline-state">No attachments yet.</p>
+                )}
+              </div>
 
               {isEditing && (
                 <div className="detail-actions">

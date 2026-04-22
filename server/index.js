@@ -216,6 +216,35 @@ pool.connect()
       console.log('ℹ️  Activity table migration note:', migrationErr.message);
     }
 
+    try {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS task_notes (
+          id SERIAL PRIMARY KEY,
+          task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+          user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          text TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS task_attachments (
+          id SERIAL PRIMARY KEY,
+          task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+          user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          file_name VARCHAR(255) NOT NULL,
+          mime_type VARCHAR(120),
+          file_size INTEGER DEFAULT 0,
+          data_url TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_task_notes_task_id ON task_notes(task_id);
+        CREATE INDEX IF NOT EXISTS idx_task_attachments_task_id ON task_attachments(task_id);
+      `);
+      console.log('✅ Database migration: task notes and attachments ready');
+    } catch (migrationErr) {
+      console.log('ℹ️  Task notes/attachments migration note:', migrationErr.message);
+    }
+
     // Ensure users table supports profile avatar images and bio text
     try {
       await client.query(`
@@ -573,7 +602,30 @@ async function getCompleteTask(taskId) {
           'timestamp', comment.created_at
         )) FILTER (WHERE comment.id IS NOT NULL),
         '[]'
-      ) as comments
+      ) as comments,
+      COALESCE(
+        json_agg(DISTINCT jsonb_build_object(
+          'id', note.id,
+          'author', nu.name,
+          'authorId', nu.id,
+          'text', note.text,
+          'timestamp', note.created_at
+        )) FILTER (WHERE note.id IS NOT NULL),
+        '[]'
+      ) as notes,
+      COALESCE(
+        json_agg(DISTINCT jsonb_build_object(
+          'id', attachment.id,
+          'fileName', attachment.file_name,
+          'mimeType', attachment.mime_type,
+          'fileSize', attachment.file_size,
+          'dataUrl', attachment.data_url,
+          'uploadedBy', au.name,
+          'uploadedById', au.id,
+          'createdAt', attachment.created_at
+        )) FILTER (WHERE attachment.id IS NOT NULL),
+        '[]'
+      ) as attachments
     FROM tasks t
     LEFT JOIN users creator ON t.created_by = creator.id
     LEFT JOIN teams team ON t.team_id = team.id
@@ -584,6 +636,10 @@ async function getCompleteTask(taskId) {
     LEFT JOIN subtasks s ON t.id = s.task_id
     LEFT JOIN comments comment ON t.id = comment.task_id
     LEFT JOIN users cu ON comment.user_id = cu.id
+    LEFT JOIN task_notes note ON t.id = note.task_id
+    LEFT JOIN users nu ON note.user_id = nu.id
+    LEFT JOIN task_attachments attachment ON t.id = attachment.task_id
+    LEFT JOIN users au ON attachment.user_id = au.id
     WHERE t.id = $1
     GROUP BY t.id, creator.name, team.name, course.name, course.semester
   `, [taskId]);
@@ -614,7 +670,9 @@ async function getCompleteTask(taskId) {
     assignees: task.assignees,
     tags: task.tags,
     subtasks: task.subtasks,
-    comments: task.comments
+    comments: task.comments,
+    notes: task.notes,
+    attachments: task.attachments
   };
 }
 // Helper function to create notification (should be with other helpers)
@@ -627,6 +685,26 @@ async function createNotification(userId, type, title, message, link = null, met
   } catch (error) {
     console.error('Error creating notification:', error);
   }
+}
+
+async function getTaskAccess(taskId, userId) {
+  const taskResult = await pool.query('SELECT * FROM tasks WHERE id = $1', [taskId]);
+  if (taskResult.rows.length === 0) {
+    return { found: false };
+  }
+
+  const task = taskResult.rows[0];
+  const assigneeCheck = await pool.query(
+    'SELECT 1 FROM task_assignees WHERE task_id = $1 AND user_id = $2',
+    [taskId, userId]
+  );
+
+  return {
+    found: true,
+    task,
+    isCreator: Number(task.created_by) === Number(userId),
+    isAssignee: assigneeCheck.rows.length > 0
+  };
 }
 
 const DEADLINE_REMINDER_DAYS = [30, 20, 15, 10, 5, 2, 1];
@@ -2006,10 +2084,22 @@ app.delete('/api/teams/:id', authenticateToken, async (req, res) => {
 app.get('/api/tasks/assigned', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT t.*, team.name as team_name, c.name as course_name, c.semester as course_semester
+      SELECT t.*, team.name as team_name, c.name as course_name, c.semester as course_semester,
+        COALESCE(comment_counts.comments_count, 0) as comments_count,
+        COALESCE(attachment_counts.attachments_count, 0) as attachments_count
       FROM tasks t
       LEFT JOIN teams team ON t.team_id = team.id
       LEFT JOIN courses c ON t.course_id = c.id
+      LEFT JOIN (
+        SELECT task_id, COUNT(*)::int as comments_count
+        FROM comments
+        GROUP BY task_id
+      ) comment_counts ON comment_counts.task_id = t.id
+      LEFT JOIN (
+        SELECT task_id, COUNT(*)::int as attachments_count
+        FROM task_attachments
+        GROUP BY task_id
+      ) attachment_counts ON attachment_counts.task_id = t.id
       WHERE t.id IN (SELECT task_id FROM task_assignees WHERE user_id = $1)
         AND t.created_by <> $1
       ORDER BY t.created_at DESC
@@ -2025,6 +2115,8 @@ app.get('/api/tasks/created', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT t.*, team.name as team_name, c.name as course_name, c.semester as course_semester,
+        COALESCE(comment_counts.comments_count, 0) as comments_count,
+        COALESCE(attachment_counts.attachments_count, 0) as attachments_count,
         COALESCE(
           json_agg(DISTINCT jsonb_build_object(
             'id', u.id,
@@ -2038,6 +2130,16 @@ app.get('/api/tasks/created', authenticateToken, async (req, res) => {
       LEFT JOIN courses c ON t.course_id = c.id
       LEFT JOIN task_assignees ta ON t.id = ta.task_id
       LEFT JOIN users u ON ta.user_id = u.id
+      LEFT JOIN (
+        SELECT task_id, COUNT(*)::int as comments_count
+        FROM comments
+        GROUP BY task_id
+      ) comment_counts ON comment_counts.task_id = t.id
+      LEFT JOIN (
+        SELECT task_id, COUNT(*)::int as attachments_count
+        FROM task_attachments
+        GROUP BY task_id
+      ) attachment_counts ON attachment_counts.task_id = t.id
       WHERE t.created_by = $1
         AND EXISTS (
           SELECT 1
@@ -2062,6 +2164,8 @@ app.get('/api/tasks', authenticateToken, async (req, res) => {
       SELECT t.*, 
         c.name as course_name,
         c.semester as course_semester,
+        COALESCE(comment_counts.comments_count, 0) as comments_count,
+        COALESCE(attachment_counts.attachments_count, 0) as attachments_count,
         COALESCE(json_agg(DISTINCT tt.tag_name) FILTER (WHERE tt.tag_name IS NOT NULL), '[]') as tags,
         COALESCE(
           json_agg(DISTINCT jsonb_build_object(
@@ -2076,6 +2180,16 @@ app.get('/api/tasks', authenticateToken, async (req, res) => {
       LEFT JOIN users u ON ta.user_id = u.id
       LEFT JOIN task_tags tt ON t.id = tt.task_id
       LEFT JOIN courses c ON t.course_id = c.id
+      LEFT JOIN (
+        SELECT task_id, COUNT(*)::int as comments_count
+        FROM comments
+        GROUP BY task_id
+      ) comment_counts ON comment_counts.task_id = t.id
+      LEFT JOIN (
+        SELECT task_id, COUNT(*)::int as attachments_count
+        FROM task_attachments
+        GROUP BY task_id
+      ) attachment_counts ON attachment_counts.task_id = t.id
       WHERE t.id IN (SELECT task_id FROM task_assignees WHERE user_id = $1)
     `;
     const params = [req.user.id];
@@ -2446,6 +2560,117 @@ app.post('/api/tasks/:id/comments', authenticateToken, async (req, res) => {
     const updatedTask = await getCompleteTask(req.params.id);
     res.json(updatedTask);
   } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/tasks/:id/notes', authenticateToken, async (req, res) => {
+  try {
+    const access = await getTaskAccess(req.params.id, req.user.id);
+    if (!access.found) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    if (!access.isCreator && !access.isAssignee) {
+      return res.status(403).json({ error: 'You are not authorized to add notes to this task' });
+    }
+    if (!req.body?.text?.trim()) {
+      return res.status(400).json({ error: 'Note text is required' });
+    }
+
+    await pool.query(
+      'INSERT INTO task_notes (task_id, user_id, text) VALUES ($1, $2, $3)',
+      [req.params.id, req.user.id, req.body.text.trim()]
+    );
+    const updatedTask = await getCompleteTask(req.params.id);
+    res.json(updatedTask);
+  } catch (error) {
+    console.error('Add task note error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.delete('/api/tasks/:taskId/notes/:noteId', authenticateToken, async (req, res) => {
+  try {
+    const noteResult = await pool.query(
+      `SELECT n.*, t.created_by
+       FROM task_notes n
+       JOIN tasks t ON t.id = n.task_id
+       WHERE n.id = $1 AND n.task_id = $2`,
+      [req.params.noteId, req.params.taskId]
+    );
+
+    if (noteResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Note not found' });
+    }
+
+    const note = noteResult.rows[0];
+    const canDelete = Number(note.user_id) === Number(req.user.id) || Number(note.created_by) === Number(req.user.id);
+    if (!canDelete) {
+      return res.status(403).json({ error: 'You are not authorized to delete this note' });
+    }
+
+    await pool.query('DELETE FROM task_notes WHERE id = $1', [req.params.noteId]);
+    const updatedTask = await getCompleteTask(req.params.taskId);
+    res.json(updatedTask);
+  } catch (error) {
+    console.error('Delete task note error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/tasks/:id/attachments', authenticateToken, async (req, res) => {
+  try {
+    const access = await getTaskAccess(req.params.id, req.user.id);
+    if (!access.found) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    if (!access.isCreator && !access.isAssignee) {
+      return res.status(403).json({ error: 'You are not authorized to add attachments to this task' });
+    }
+
+    const { fileName, mimeType, fileSize, dataUrl } = req.body || {};
+    if (!fileName || !dataUrl) {
+      return res.status(400).json({ error: 'Attachment file data is required' });
+    }
+
+    await pool.query(
+      `INSERT INTO task_attachments (task_id, user_id, file_name, mime_type, file_size, data_url)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [req.params.id, req.user.id, fileName, mimeType || 'application/octet-stream', Number(fileSize) || 0, dataUrl]
+    );
+    const updatedTask = await getCompleteTask(req.params.id);
+    res.json(updatedTask);
+  } catch (error) {
+    console.error('Add task attachment error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.delete('/api/tasks/:taskId/attachments/:attachmentId', authenticateToken, async (req, res) => {
+  try {
+    const attachmentResult = await pool.query(
+      `SELECT a.*, t.created_by
+       FROM task_attachments a
+       JOIN tasks t ON t.id = a.task_id
+       WHERE a.id = $1 AND a.task_id = $2`,
+      [req.params.attachmentId, req.params.taskId]
+    );
+
+    if (attachmentResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Attachment not found' });
+    }
+
+    const attachment = attachmentResult.rows[0];
+    const canDelete = Number(attachment.user_id) === Number(req.user.id) || Number(attachment.created_by) === Number(req.user.id);
+    if (!canDelete) {
+      return res.status(403).json({ error: 'You are not authorized to delete this attachment' });
+    }
+
+    await pool.query('DELETE FROM task_attachments WHERE id = $1', [req.params.attachmentId]);
+    const updatedTask = await getCompleteTask(req.params.taskId);
+    res.json(updatedTask);
+  } catch (error) {
+    console.error('Delete task attachment error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });
