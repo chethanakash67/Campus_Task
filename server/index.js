@@ -2264,18 +2264,22 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
 
 // Update task
 app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
     const updates = req.body;
 
     // Get current task and verify edit access (creator or assignee).
-    const currentTask = await pool.query('SELECT * FROM tasks WHERE id = $1', [id]);
+    await client.query('BEGIN');
+
+    const currentTask = await client.query('SELECT * FROM tasks WHERE id = $1', [id]);
     if (currentTask.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Task not found' });
     }
     const task = currentTask.rows[0];
 
-    const assigneeCheck = await pool.query(
+    const assigneeCheck = await client.query(
       'SELECT 1 FROM task_assignees WHERE task_id = $1 AND user_id = $2',
       [id, req.user.id]
     );
@@ -2283,6 +2287,7 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
     const isAssignee = assigneeCheck.rows.length > 0;
 
     if (!isCreator && !isAssignee) {
+      await client.query('ROLLBACK');
       return res.status(403).json({ error: 'You are not authorized to update this task' });
     }
 
@@ -2338,10 +2343,49 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
     if (Object.keys(dbUpdates).length > 0) {
       const setClause = Object.keys(dbUpdates).map((key, i) => `${key} = $${i + 1}`).join(', ');
       const values = Object.values(dbUpdates);
-      await pool.query(
+      await client.query(
         `UPDATE tasks SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = $${values.length + 1}`,
         [...values, id]
       );
+    }
+
+    if (Array.isArray(updates.assignees)) {
+      if (!isCreator) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ error: 'Only the task creator can update assignees' });
+      }
+
+      const normalizedAssigneeIds = [...new Set(
+        updates.assignees
+          .map(assignee => Number(assignee?.id ?? assignee))
+          .filter(Number.isInteger)
+      )];
+
+      if (task.task_type === 'team' && task.team_id) {
+        const teamMembersResult = await client.query(
+          `SELECT tm.user_id
+           FROM team_members tm
+           WHERE tm.team_id = $1`,
+          [task.team_id]
+        );
+
+        const allowedMemberIds = new Set(teamMembersResult.rows.map(row => Number(row.user_id)));
+        const invalidAssignee = normalizedAssigneeIds.find(userId => !allowedMemberIds.has(userId));
+
+        if (invalidAssignee) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ error: 'Assignees must belong to the selected team' });
+        }
+      }
+
+      await client.query('DELETE FROM task_assignees WHERE task_id = $1', [id]);
+
+      for (const assigneeId of normalizedAssigneeIds) {
+        await client.query(
+          'INSERT INTO task_assignees (task_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+          [id, assigneeId]
+        );
+      }
     }
 
     if (transitionedToOnTimeDone) {
@@ -2363,11 +2407,15 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
       }
     }
 
+    await client.query('COMMIT');
     const updatedTask = await getCompleteTask(id);
     res.json(updatedTask);
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Update task error:', error);
     res.status(500).json({ error: 'Server error' });
+  } finally {
+    client.release();
   }
 });
 

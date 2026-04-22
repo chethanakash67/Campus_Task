@@ -279,11 +279,28 @@ export const AppProvider = ({ children }) => {
       });
       
       setTasks(tasks.map(task => 
-        task.id === taskId ? { ...task, ...response.data } : task
+        task.id === taskId ? response.data : task
       ));
       return response.data;
     } catch (error) {
       console.error('Error updating task:', error);
+      throw error;
+    }
+  };
+
+  // Delete task
+  const deleteTask = async (taskId) => {
+    try {
+      const token = localStorage.getItem('campusToken');
+      await axios.delete(`${API_URL}/tasks/${taskId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      setTasks(tasks.filter(task => task.id !== taskId));
+      addToast('Task deleted successfully', 'success');
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      addToast(error.response?.data?.error || 'Failed to delete task', 'error');
       throw error;
     }
   };
@@ -415,6 +432,7 @@ const updateTeam = async (teamId, teamData) => {
     addTask,
     moveTask,
     updateTask,
+    deleteTask,
     refreshTask,
     duplicateTask,
     addTeam,

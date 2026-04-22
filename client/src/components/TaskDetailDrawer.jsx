@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   FaTimes, FaCalendarAlt, FaFlag, FaUser, FaUsers, FaClock,
-  FaCheckCircle, FaExclamationTriangle, FaHistory, FaEdit,
+  FaCheckCircle, FaExclamationTriangle, FaHistory, FaEdit, FaTrash,
   FaPaperclip, FaComment, FaSave, FaSpinner
 } from 'react-icons/fa';
 import { useApp } from '../context/AppContext';
@@ -10,13 +10,23 @@ import axios from 'axios';
 import './TaskDetailDrawer.css';
 
 function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
-  const { currentUser } = useApp();
+  const { currentUser, teams, updateTask, deleteTask, addToast } = useApp();
   const [activeTab, setActiveTab] = useState('details');
   const [progress, setProgress] = useState(task?.progress || 0);
   const [updateNote, setUpdateNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activityLog, setActivityLog] = useState([]);
   const [loadingActivity, setLoadingActivity] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSavingDetails, setIsSavingDetails] = useState(false);
+  const [isDeletingTask, setIsDeletingTask] = useState(false);
+  const [editedTask, setEditedTask] = useState({
+    title: task?.title || '',
+    description: task?.description || '',
+    priority: task?.priority || 'Medium',
+    dueDate: task?.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '',
+    assignees: task?.assignees || []
+  });
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
@@ -24,13 +34,38 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
   const isAssigned = task?.assignees?.some(
     a => a.id === currentUser?.id || a.email === currentUser?.email
   );
+  const isCreator = Number(task?.createdBy) === Number(currentUser?.id);
+  const teamMembers = task?.teamId
+    ? (teams.find(team => Number(team.id) === Number(task.teamId))?.members || [])
+    : [];
 
   useEffect(() => {
     if (task?.id) {
       fetchActivityLog();
       setProgress(task.progress || 0);
+      setIsEditing(false);
+      setEditedTask({
+        title: task.title || '',
+        description: task.description || '',
+        priority: task.priority || 'Medium',
+        dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '',
+        assignees: task.assignees || []
+      });
     }
   }, [task?.id]);
+
+  useEffect(() => {
+    if (task?.id) {
+      setEditedTask({
+        title: task.title || '',
+        description: task.description || '',
+        priority: task.priority || 'Medium',
+        dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '',
+        assignees: task.assignees || []
+      });
+      setProgress(task.progress || 0);
+    }
+  }, [task]);
 
   const fetchActivityLog = async () => {
     try {
@@ -131,6 +166,57 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
     return new Date() > dueDate;
   };
 
+  const handleAssigneeToggle = (member) => {
+    setEditedTask(prev => {
+      const isSelected = prev.assignees.some(assignee => Number(assignee.id) === Number(member.id));
+      return {
+        ...prev,
+        assignees: isSelected
+          ? prev.assignees.filter(assignee => Number(assignee.id) !== Number(member.id))
+          : [...prev.assignees, member]
+      };
+    });
+  };
+
+  const handleSaveDetails = async () => {
+    if (!editedTask.title.trim()) {
+      addToast('Task title is required', 'error');
+      return;
+    }
+
+    setIsSavingDetails(true);
+    try {
+      const updatedTask = await updateTask(task.id, {
+        title: editedTask.title.trim(),
+        description: editedTask.description.trim(),
+        priority: editedTask.priority,
+        dueDate: editedTask.dueDate || null,
+        assignees: task.taskType === 'team' ? editedTask.assignees : undefined
+      });
+      setIsEditing(false);
+      addToast('Task updated successfully', 'success');
+      onTaskUpdate?.(updatedTask);
+    } catch (error) {
+      addToast(error.response?.data?.error || 'Failed to update task', 'error');
+    } finally {
+      setIsSavingDetails(false);
+    }
+  };
+
+  const handleDeleteTask = async () => {
+    if (!window.confirm(`Delete task "${task.title}"?`)) return;
+
+    setIsDeletingTask(true);
+    try {
+      await deleteTask(task.id);
+      onClose();
+    } catch (error) {
+      // Toast handled in context
+    } finally {
+      setIsDeletingTask(false);
+    }
+  };
+
   if (!task) return null;
 
   const statusInfo = getStatusInfo();
@@ -169,6 +255,27 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
             </button>
           </div>
           <h2 className="drawer-title">{task.title}</h2>
+          {isCreator && (
+            <div className="drawer-header-actions">
+              <button
+                className={`drawer-action-btn ${isEditing ? 'active' : ''}`}
+                onClick={() => setIsEditing(prev => !prev)}
+                type="button"
+              >
+                <FaEdit />
+                {isEditing ? 'Cancel Edit' : 'Edit Task'}
+              </button>
+              <button
+                className="drawer-action-btn danger"
+                onClick={handleDeleteTask}
+                type="button"
+                disabled={isDeletingTask}
+              >
+                {isDeletingTask ? <FaSpinner className="spinner" /> : <FaTrash />}
+                Delete
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Tabs */}
@@ -213,12 +320,20 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
               </div>
 
               {/* Description */}
-              {task.description && (
-                <div className="detail-section">
-                  <h4 className="section-label">Description</h4>
-                  <p className="description-text">{task.description}</p>
-                </div>
-              )}
+              <div className="detail-section">
+                <h4 className="section-label">Description</h4>
+                {isEditing ? (
+                  <textarea
+                    className="drawer-textarea"
+                    value={editedTask.description}
+                    onChange={(e) => setEditedTask(prev => ({ ...prev, description: e.target.value }))}
+                    rows={4}
+                    placeholder="Add more details..."
+                  />
+                ) : (
+                  <p className="description-text">{task.description || 'No description provided.'}</p>
+                )}
+              </div>
 
               {/* Info Grid */}
               <div className="info-grid">
@@ -234,9 +349,18 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
                   <FaCalendarAlt className="info-icon" />
                   <div className="info-content">
                     <span className="info-label">Due Date</span>
-                    <span className={`info-value ${isOverdue() ? 'overdue' : ''}`}>
-                      {task.dueDate ? formatDate(task.dueDate).split(',')[0] : 'Not set'}
-                    </span>
+                    {isEditing ? (
+                      <input
+                        type="date"
+                        className="drawer-input"
+                        value={editedTask.dueDate}
+                        onChange={(e) => setEditedTask(prev => ({ ...prev, dueDate: e.target.value }))}
+                      />
+                    ) : (
+                      <span className={`info-value ${isOverdue() ? 'overdue' : ''}`}>
+                        {task.dueDate ? formatDate(task.dueDate).split(',')[0] : 'Not set'}
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -251,34 +375,87 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
                 )}
 
                 <div className="info-item">
-                  <FaClock className="info-icon" />
+                  {isEditing ? <FaFlag className="info-icon" /> : <FaClock className="info-icon" />}
                   <div className="info-content">
-                    <span className="info-label">Created</span>
-                    <span className="info-value">{formatRelativeTime(task.createdAt)}</span>
+                    <span className="info-label">{isEditing ? 'Priority' : 'Created'}</span>
+                    {isEditing ? (
+                      <select
+                        className="drawer-input"
+                        value={editedTask.priority}
+                        onChange={(e) => setEditedTask(prev => ({ ...prev, priority: e.target.value }))}
+                      >
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                      </select>
+                    ) : (
+                      <span className="info-value">{formatRelativeTime(task.createdAt)}</span>
+                    )}
                   </div>
                 </div>
               </div>
 
+              {isEditing && (
+                <div className="detail-section">
+                  <h4 className="section-label">Task Title</h4>
+                  <input
+                    type="text"
+                    className="drawer-input"
+                    value={editedTask.title}
+                    onChange={(e) => setEditedTask(prev => ({ ...prev, title: e.target.value }))}
+                    placeholder="Task title"
+                  />
+                </div>
+              )}
+
               {/* Assignees */}
               <div className="detail-section">
                 <h4 className="section-label">Assigned to</h4>
-                <div className="assignees-list">
-                  {task.assignees && task.assignees.length > 0 ? (
-                    task.assignees.map(assignee => (
-                      <div key={assignee.id} className="assignee-item">
-                        <div className="assignee-avatar">
-                          {assignee.name?.charAt(0).toUpperCase() || 'U'}
+                {isEditing && task.taskType === 'team' ? (
+                  <div className="editable-assignees-grid">
+                    {teamMembers.length > 0 ? (
+                      teamMembers.map(member => {
+                        const isSelected = editedTask.assignees.some(assignee => Number(assignee.id) === Number(member.id));
+                        return (
+                          <button
+                            key={member.id}
+                            type="button"
+                            className={`editable-assignee-chip ${isSelected ? 'selected' : ''}`}
+                            onClick={() => handleAssigneeToggle(member)}
+                          >
+                            <div className="assignee-avatar">
+                              {member.name?.charAt(0).toUpperCase() || 'U'}
+                            </div>
+                            <span className="assignee-name">
+                              {member.name || 'Unknown'}
+                              {member.id === currentUser?.id && ' (You)'}
+                            </span>
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <span className="no-assignees">No team members available</span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="assignees-list">
+                    {task.assignees && task.assignees.length > 0 ? (
+                      task.assignees.map(assignee => (
+                        <div key={assignee.id} className="assignee-item">
+                          <div className="assignee-avatar">
+                            {assignee.name?.charAt(0).toUpperCase() || 'U'}
+                          </div>
+                          <span className="assignee-name">
+                            {assignee.name || 'Unknown'}
+                            {assignee.id === currentUser?.id && ' (You)'}
+                          </span>
                         </div>
-                        <span className="assignee-name">
-                          {assignee.name || 'Unknown'}
-                          {assignee.id === currentUser?.id && ' (You)'}
-                        </span>
-                      </div>
-                    ))
-                  ) : (
-                    <span className="no-assignees">No assignees</span>
-                  )}
-                </div>
+                      ))
+                    ) : (
+                      <span className="no-assignees">No assignees</span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Tags */}
@@ -290,6 +467,36 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
                       <span key={tag} className="tag-chip">{tag}</span>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {isEditing && (
+                <div className="detail-actions">
+                  <button
+                    type="button"
+                    className="detail-action-btn secondary"
+                    onClick={() => {
+                      setIsEditing(false);
+                      setEditedTask({
+                        title: task.title || '',
+                        description: task.description || '',
+                        priority: task.priority || 'Medium',
+                        dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '',
+                        assignees: task.assignees || []
+                      });
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="detail-action-btn primary"
+                    onClick={handleSaveDetails}
+                    disabled={isSavingDetails}
+                  >
+                    {isSavingDetails ? <FaSpinner className="spinner" /> : <FaSave />}
+                    Save Changes
+                  </button>
                 </div>
               )}
             </div>
