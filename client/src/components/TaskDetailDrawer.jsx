@@ -9,10 +9,11 @@ import { useApp } from '../context/AppContext';
 import axios from 'axios';
 import './TaskDetailDrawer.css';
 
-function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
+function TaskDetailDrawer({ task: initialTask, onClose, onTaskUpdate }) {
   const { currentUser, teams, updateTask, deleteTask, addToast } = useApp();
   const [activeTab, setActiveTab] = useState('details');
-  const [progress, setProgress] = useState(task?.progress || 0);
+  const [taskData, setTaskData] = useState(initialTask);
+  const [progress, setProgress] = useState(initialTask?.progress || 0);
   const [updateNote, setUpdateNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activityLog, setActivityLog] = useState([]);
@@ -26,14 +27,15 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
   const [deletingNoteId, setDeletingNoteId] = useState(null);
   const [deletingAttachmentId, setDeletingAttachmentId] = useState(null);
   const [editedTask, setEditedTask] = useState({
-    title: task?.title || '',
-    description: task?.description || '',
-    priority: task?.priority || 'Medium',
-    dueDate: task?.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '',
-    assignees: task?.assignees || []
+    title: initialTask?.title || '',
+    description: initialTask?.description || '',
+    priority: initialTask?.priority || 'Medium',
+    dueDate: initialTask?.dueDate ? new Date(initialTask.dueDate).toISOString().split('T')[0] : '',
+    assignees: initialTask?.assignees || []
   });
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+  const task = taskData || initialTask;
 
   // Check if current user is assigned to this task
   const isAssigned = task?.assignees?.some(
@@ -46,22 +48,19 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
   const canContribute = isCreator || isAssigned;
 
   useEffect(() => {
-    if (task?.id) {
-      fetchActivityLog();
-      setProgress(task.progress || 0);
-      setIsEditing(false);
-      setEditedTask({
-        title: task.title || '',
-        description: task.description || '',
-        priority: task.priority || 'Medium',
-        dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '',
-        assignees: task.assignees || []
-      });
-    }
-  }, [task?.id]);
+    setTaskData(initialTask);
+  }, [initialTask]);
 
   useEffect(() => {
     if (task?.id) {
+      fetchActivityLog();
+      fetchTaskDetails();
+    }
+  }, [initialTask?.id]);
+
+  useEffect(() => {
+    if (task?.id) {
+      setIsEditing(false);
       setEditedTask({
         title: task.title || '',
         description: task.description || '',
@@ -73,11 +72,23 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
     }
   }, [task]);
 
+  const fetchTaskDetails = async () => {
+    try {
+      const token = localStorage.getItem('campusToken');
+      const response = await axios.get(`${API_URL}/tasks/${initialTask.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setTaskData(response.data);
+    } catch (error) {
+      console.error('Error fetching task details:', error);
+    }
+  };
+
   const fetchActivityLog = async () => {
     try {
       setLoadingActivity(true);
       const token = localStorage.getItem('campusToken');
-      const response = await axios.get(`${API_URL}/tasks/${task.id}/activity`, {
+      const response = await axios.get(`${API_URL}/tasks/${initialTask.id}/activity`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setActivityLog(response.data || []);
@@ -104,9 +115,8 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
 
       setUpdateNote('');
       fetchActivityLog();
-      if (onTaskUpdate) {
-        onTaskUpdate(response.data);
-      }
+      setTaskData(response.data);
+      onTaskUpdate?.(response.data);
     } catch (error) {
       console.error('Error updating progress:', error);
     } finally {
@@ -200,6 +210,7 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
         assignees: task.taskType === 'team' ? editedTask.assignees : undefined
       });
       setIsEditing(false);
+      setTaskData(updatedTask);
       addToast('Task updated successfully', 'success');
       onTaskUpdate?.(updatedTask);
     } catch (error) {
@@ -241,6 +252,7 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
         headers: { Authorization: `Bearer ${token}` }
       });
       setNoteText('');
+      setTaskData(response.data);
       addToast('Note added', 'success');
       onTaskUpdate?.(response.data);
     } catch (error) {
@@ -257,6 +269,7 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
       const response = await axios.delete(`${API_URL}/tasks/${task.id}/notes/${noteId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      setTaskData(response.data);
       addToast('Note removed', 'success');
       onTaskUpdate?.(response.data);
     } catch (error) {
@@ -294,6 +307,7 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      setTaskData(response.data);
       addToast('Attachment uploaded', 'success');
       onTaskUpdate?.(response.data);
     } catch (error) {
@@ -311,6 +325,7 @@ function TaskDetailDrawer({ task, onClose, onTaskUpdate }) {
       const response = await axios.delete(`${API_URL}/tasks/${task.id}/attachments/${attachmentId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      setTaskData(response.data);
       addToast('Attachment removed', 'success');
       onTaskUpdate?.(response.data);
     } catch (error) {

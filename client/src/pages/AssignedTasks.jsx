@@ -783,7 +783,10 @@ function AssignedTasks() {
               setSelectedTask(null);
               fetchAllTasks();
             }}
-            onTaskUpdate={() => fetchAllTasks()}
+            onTaskUpdate={(updatedTask) => {
+              setSelectedTask(updatedTask);
+              fetchAllTasks();
+            }}
           />
         )}
       </main>

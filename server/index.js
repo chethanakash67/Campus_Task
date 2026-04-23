@@ -2548,6 +2548,24 @@ app.delete('/api/tasks/:id', authenticateToken, async (req, res) => {
   }
 });
 
+app.get('/api/tasks/:id', authenticateToken, async (req, res) => {
+  try {
+    const access = await getTaskAccess(req.params.id, req.user.id);
+    if (!access.found) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    if (!access.isCreator && !access.isAssignee) {
+      return res.status(403).json({ error: 'You are not authorized to view this task' });
+    }
+
+    const task = await getCompleteTask(req.params.id);
+    res.json(task);
+  } catch (error) {
+    console.error('Get task detail error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // Add comment
 app.post('/api/tasks/:id/comments', authenticateToken, async (req, res) => {
   try {
