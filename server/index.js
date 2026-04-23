@@ -2110,7 +2110,7 @@ app.get('/api/tasks/assigned', authenticateToken, async (req, res) => {
   }
 });
 
-// Get tasks CREATED BY the current user (tasks I assigned to others)
+// Get tasks CREATED BY the current user
 app.get('/api/tasks/created', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(`
@@ -2141,12 +2141,7 @@ app.get('/api/tasks/created', authenticateToken, async (req, res) => {
         GROUP BY task_id
       ) attachment_counts ON attachment_counts.task_id = t.id
       WHERE t.created_by = $1
-        AND EXISTS (
-          SELECT 1
-          FROM task_assignees ta2
-          WHERE ta2.task_id = t.id AND ta2.user_id <> $1
-        )
-      GROUP BY t.id, team.name, c.name, c.semester
+      GROUP BY t.id, team.name, c.name, c.semester, comment_counts.comments_count, attachment_counts.attachments_count
       ORDER BY t.created_at DESC
     `, [req.user.id]);
     res.json(result.rows);
@@ -2162,6 +2157,7 @@ app.get('/api/tasks', authenticateToken, async (req, res) => {
     const { type, teamId } = req.query;
     let query = `
       SELECT t.*, 
+        team.name as team_name,
         c.name as course_name,
         c.semester as course_semester,
         COALESCE(comment_counts.comments_count, 0) as comments_count,
@@ -2179,6 +2175,7 @@ app.get('/api/tasks', authenticateToken, async (req, res) => {
       LEFT JOIN task_assignees ta ON t.id = ta.task_id
       LEFT JOIN users u ON ta.user_id = u.id
       LEFT JOIN task_tags tt ON t.id = tt.task_id
+      LEFT JOIN teams team ON t.team_id = team.id
       LEFT JOIN courses c ON t.course_id = c.id
       LEFT JOIN (
         SELECT task_id, COUNT(*)::int as comments_count
@@ -2197,7 +2194,7 @@ app.get('/api/tasks', authenticateToken, async (req, res) => {
     if (type) { query += ' AND t.task_type = $2'; params.push(type); }
     if (teamId) { query += ` AND t.team_id = $${params.length + 1}`; params.push(teamId); }
 
-    query += ' GROUP BY t.id, c.name, c.semester ORDER BY t.created_at DESC';
+    query += ' GROUP BY t.id, team.name, c.name, c.semester, comment_counts.comments_count, attachment_counts.attachments_count ORDER BY t.created_at DESC';
     const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (error) {
@@ -2224,6 +2221,7 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
       estimatedHours,
       courseId
     } = req.body;
+    const normalizedDueDate = dueDate ? dueDate : null;
 
     const taskResult = await client.query(
       `INSERT INTO tasks
@@ -2235,7 +2233,7 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
         description || '',
         priority || 'Medium',
         status || 'todo',
-        dueDate,
+        normalizedDueDate,
         taskType || 'personal',
         teamId,
         req.user.id,
@@ -2316,9 +2314,9 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
                                          padding: 4px 12px; border-radius: 4px; font-size: 14px; font-weight: 500;">
                               ${priority} Priority
                             </span>
-                            ${dueDate ? `
+                            ${normalizedDueDate ? `
                               <span style="background: #e0e7ff; color: #4338ca; padding: 4px 12px; border-radius: 4px; font-size: 14px;">
-                                Due: ${new Date(dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                Due: ${new Date(normalizedDueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                               </span>
                             ` : ''}
                             ${teamName ? `
@@ -2413,7 +2411,7 @@ app.put('/api/tasks/:id', authenticateToken, async (req, res) => {
     Object.keys(updates).forEach(key => {
       if (validFields.includes(key)) {
         const snakeKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
-        dbUpdates[snakeKey] = updates[key];
+        dbUpdates[snakeKey] = snakeKey === 'due_date' && !updates[key] ? null : updates[key];
       }
     });
 

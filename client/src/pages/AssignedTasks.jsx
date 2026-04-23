@@ -91,15 +91,20 @@ function AssignedTasks() {
   const fetchAllTasks = async () => {
     try {
       const token = localStorage.getItem('campusToken');
-      const [assignedRes, createdRes] = await Promise.all([
-        axios.get(`${API_URL}/tasks/assigned`, {
+      const [allRes, createdRes] = await Promise.all([
+        axios.get(`${API_URL}/tasks`, {
           headers: { Authorization: `Bearer ${token}` }
         }),
         axios.get(`${API_URL}/tasks/created`, {
           headers: { Authorization: `Bearer ${token}` }
         })
       ]);
-      setAssignedToMeTasks(assignedRes.data);
+
+      const currentUserId = Number(currentUser?.id);
+      const allTasksData = allRes.data || [];
+      setAssignedToMeTasks(
+        allTasksData.filter(task => Number(task.created_by) !== currentUserId)
+      );
       setCreatedByMeTasks(createdRes.data);
       await fetchProductivityFeatures(token);
     } catch (error) {

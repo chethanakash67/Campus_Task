@@ -224,7 +224,7 @@ function Teams() {
     }
   };
 
-  const handleTaskSubmit = (e) => {
+  const handleTaskSubmit = async (e) => {
     e.preventDefault();
     if (!newTask.title.trim()) return;
 
@@ -246,16 +246,20 @@ function Teams() {
       subtasks: []
     };
 
-    addTask(taskToAdd);
-    setShowTaskModal(false);
-    setNewTask({
-      title: '',
-      description: '',
-      priority: 'Medium',
-      dueDate: '',
-      assignees: []
-    });
-    setSelectedTeamForTask(null);
+    try {
+      await addTask(taskToAdd);
+      setShowTaskModal(false);
+      setNewTask({
+        title: '',
+        description: '',
+        priority: 'Medium',
+        dueDate: '',
+        assignees: []
+      });
+      setSelectedTeamForTask(null);
+    } catch (error) {
+      console.error('Error creating team task:', error);
+    }
   };
 
   const toggleExpandTeam = (teamId) => {

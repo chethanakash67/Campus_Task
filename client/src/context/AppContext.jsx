@@ -238,7 +238,17 @@ export const AppProvider = ({ children }) => {
   const addTask = async (taskData) => {
     try {
       const token = localStorage.getItem('campusToken');
-      const response = await axios.post(`${API_URL}/tasks`, taskData, {
+      const normalizedTaskData = {
+        ...taskData,
+        title: taskData.title?.trim() || '',
+        description: taskData.description?.trim() || '',
+        dueDate: taskData.dueDate ? taskData.dueDate : null,
+        tags: taskData.tags || [],
+        assignees: taskData.assignees || [],
+        subtasks: taskData.subtasks || []
+      };
+
+      const response = await axios.post(`${API_URL}/tasks`, normalizedTaskData, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setTasks([...tasks, response.data]);
