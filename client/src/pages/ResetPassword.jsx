@@ -1,14 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
-import { Lock, AlertCircle, ArrowLeft, CheckCircle, Users, Calendar, Clock } from 'lucide-react';
+import { Lock, AlertCircle, ArrowLeft, CheckCircle, Users, Calendar } from 'lucide-react';
 import { MdVisibility, MdVisibilityOff } from 'react-icons/md';
 import '../styles/auth.css';
 
 function ResetPassword() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [searchParams] = useSearchParams();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -16,60 +15,15 @@ function ResetPassword() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
-  const [countdown, setCountdown] = useState(60);
-  const [resendLoading, setResendLoading] = useState(false);
-  const inputRefs = useRef([]);
 
-  const email = location.state?.email || localStorage.getItem('resetEmail') || '';
+  const token = searchParams.get('token') || '';
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
   useEffect(() => {
-    if (!email) {
+    if (!token) {
       navigate('/forgot-password');
     }
-  }, [email, navigate]);
-
-  useEffect(() => {
-    if (countdown > 0) {
-      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [countdown]);
-
-  useEffect(() => {
-    if (inputRefs.current[0]) {
-      inputRefs.current[0].focus();
-    }
-  }, []);
-
-  const handleOtpChange = (index, value) => {
-    if (!/^\d*$/.test(value)) return;
-    
-    const newOtp = [...otp];
-    newOtp[index] = value.slice(-1);
-    setOtp(newOtp);
-    setError('');
-
-    if (value && index < 5) {
-      inputRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handleKeyDown = (index, e) => {
-    if (e.key === 'Backspace' && !otp[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
-    }
-  };
-
-  const handlePaste = (e) => {
-    e.preventDefault();
-    const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    if (pastedData.length === 6) {
-      const newOtp = pastedData.split('');
-      setOtp(newOtp);
-      inputRefs.current[5]?.focus();
-    }
-  };
+  }, [token, navigate]);
 
   const getPasswordStrength = () => {
     if (!password) return null;
@@ -82,12 +36,6 @@ function ResetPassword() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const otpValue = otp.join('');
-    
-    if (otpValue.length !== 6) {
-      setError('Please enter the complete 6-digit code');
-      return;
-    }
 
     if (!password || !confirmPassword) {
       setError('Please fill in all fields');
@@ -109,13 +57,11 @@ function ResetPassword() {
       setError('');
       
       await axios.post(API_URL + '/auth/reset-password', {
-        email: email,
-        otp: otpValue,
+        token,
         newPassword: password
       });
 
       setSuccess('Password reset successful!');
-      localStorage.removeItem('resetEmail');
       
       setTimeout(() => {
         navigate('/login', { state: { passwordReset: true } });
@@ -125,29 +71,6 @@ function ResetPassword() {
       setError(err.response?.data?.error || 'Failed to reset password. Please try again.');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleResendOTP = async () => {
-    if (countdown > 0) return;
-    
-    try {
-      setResendLoading(true);
-      setError('');
-      
-      await axios.post(API_URL + '/auth/forgot-password', { email: email });
-      
-      setSuccess('New OTP sent to your email');
-      setCountdown(60);
-      setOtp(['', '', '', '', '', '']);
-      inputRefs.current[0]?.focus();
-      
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (err) {
-      console.error('Resend error:', err);
-      setError(err.response?.data?.error || 'Failed to resend OTP');
-    } finally {
-      setResendLoading(false);
     }
   };
 
@@ -223,7 +146,7 @@ function ResetPassword() {
           <div className="auth-header">
             <h1 className="auth-title">Reset password</h1>
             <p className="auth-subtitle">
-              Enter the code sent to <strong>{email}</strong> and create a new password.
+              Create a new password for your account.
             </p>
           </div>
 
@@ -241,26 +164,6 @@ function ResetPassword() {
                 <span>{success}</span>
               </div>
             )}
-
-            <div className="auth-field">
-              <label className="auth-label">Verification Code</label>
-              <div className="auth-otp-container" onPaste={handlePaste}>
-                {otp.map((digit, index) => (
-                  <input
-                    key={index}
-                    ref={(el) => (inputRefs.current[index] = el)}
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={1}
-                    className={'auth-otp-input' + (digit ? ' filled' : '')}
-                    value={digit}
-                    onChange={(e) => handleOtpChange(index, e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(index, e)}
-                    disabled={loading}
-                  />
-                ))}
-              </div>
-            </div>
 
             <div className="auth-field">
               <label className="auth-label">New Password</label>
@@ -332,26 +235,6 @@ function ResetPassword() {
               {loading ? '' : 'Reset Password'}
             </button>
           </form>
-
-          <div className="auth-resend">
-            {countdown > 0 ? (
-              <div className="auth-timer">
-                <Clock size={16} />
-                <span>Resend code in {countdown}s</span>
-              </div>
-            ) : (
-              <p className="auth-resend-text">
-                Did not receive the code?{' '}
-                <button 
-                  className="auth-resend-btn" 
-                  onClick={handleResendOTP}
-                  disabled={resendLoading}
-                >
-                  {resendLoading ? 'Sending...' : 'Resend'}
-                </button>
-              </p>
-            )}
-          </div>
         </div>
       </div>
     </div>

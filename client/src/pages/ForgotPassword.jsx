@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { Mail, AlertCircle, CheckCircle } from 'lucide-react';
 import '../styles/auth.css';
 
 function ForgotPassword() {
-  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -29,11 +28,6 @@ function ForgotPassword() {
       await axios.post(API_URL + '/auth/forgot-password', { email: email });
 
       setSuccess('Password reset link sent! Check your email.');
-      localStorage.setItem('resetEmail', email);
-
-      setTimeout(() => {
-        navigate('/reset-password', { state: { email: email } });
-      }, 2000);
     } catch (err) {
       console.error('Forgot password error:', err);
       setError(err.response?.data?.error || 'Failed to send reset link. Please try again.');
