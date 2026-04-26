@@ -2,6 +2,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
+import GlobalQuickAdd from './components/GlobalQuickAdd';
 
 // Pages
 import Landing from './pages/Landing';
@@ -26,6 +27,7 @@ function App() {
   return (
     <AppProvider>
       <Router>
+        <GlobalQuickAdd />
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />

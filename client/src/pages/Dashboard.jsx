@@ -5,14 +5,13 @@ import Toast from '../components/Toast';
 import TaskDetailDrawer from '../components/TaskDetailDrawer';
 import { useApp } from '../context/AppContext';
 import { 
-  FaArrowUp, FaArrowDown, FaExclamationTriangle, FaCalendarAlt,
-  FaClock, FaCheckCircle, FaChartLine, FaArrowRight, FaPlus,
-  FaTasks, FaFire, FaFlag, FaUsers, FaTrophy, FaTimes, FaUser,
-  FaUserFriends, FaTag, FaClipboardList
+  FaExclamationTriangle, FaCalendarAlt,
+  FaClock, FaCheckCircle, FaArrowRight, FaPlus,
+  FaTasks, FaFire, FaFlag, FaUsers, FaTrophy, FaUser,
+  FaUserFriends, FaTag, FaClipboardList, FaPaperclip, FaBolt
 } from 'react-icons/fa';
 import { 
-  MdDashboard, MdTrendingUp, MdAccessTime, MdWarning,
-  MdOutlineInsights, MdSpeed, MdTimeline
+  MdTimeline
 } from 'react-icons/md';
 import './Dashboard.css';
 
@@ -153,10 +152,16 @@ function Dashboard() {
 
   const myTeams = getMyTeams();
 
+  const getTaskDueDate = (task) => task?.dueDate || task?.due_date || null;
+  const getTaskCourseLabel = (task) => task?.courseName || task?.course_name || task?.teamName || task?.team_name || task?.tags?.[0] || 'General';
+  const getTaskAttachmentCount = (task) => task?.attachments_count || task?.attachmentsCount || task?.attachments?.length || 0;
+  const getTaskCreatedBy = (task) => task?.createdBy || task?.created_by;
+
   // Helper functions
   const isTaskOverdue = (task) => {
-    if (!task.dueDate || task.status === 'done' || task.status === 'completed_late') return false;
-    const dueDate = new Date(task.dueDate);
+    const taskDueDate = getTaskDueDate(task);
+    if (!taskDueDate || task.status === 'done' || task.status === 'completed_late') return false;
+    const dueDate = new Date(taskDueDate);
     const today = new Date();
     dueDate.setHours(23, 59, 59, 999);
     today.setHours(0, 0, 0, 0);
@@ -166,15 +171,17 @@ function Dashboard() {
   const isCompletedLate = (task) => task.status === 'completed_late';
   
   const isDueToday = (task) => {
-    if (!task.dueDate || task.status === 'done' || task.status === 'completed_late') return false;
-    const dueDate = new Date(task.dueDate);
+    const taskDueDate = getTaskDueDate(task);
+    if (!taskDueDate || task.status === 'done' || task.status === 'completed_late') return false;
+    const dueDate = new Date(taskDueDate);
     const today = new Date();
     return dueDate.toDateString() === today.toDateString();
   };
 
   const isDueThisWeek = (task) => {
-    if (!task.dueDate || task.status === 'done' || task.status === 'completed_late') return false;
-    const dueDate = new Date(task.dueDate);
+    const taskDueDate = getTaskDueDate(task);
+    if (!taskDueDate || task.status === 'done' || task.status === 'completed_late') return false;
+    const dueDate = new Date(taskDueDate);
     const today = new Date();
     const weekFromNow = new Date(today);
     weekFromNow.setDate(weekFromNow.getDate() + 7);
@@ -185,8 +192,8 @@ function Dashboard() {
   const userTasks = useMemo(() => {
     return tasks.filter(t => 
       t.assignees?.some(a => a.id === currentUser?.id || a.email === currentUser?.email) ||
-      t.createdBy === currentUser?.id ||
-      t.createdBy === currentUser?.email
+      getTaskCreatedBy(t) === currentUser?.id ||
+      getTaskCreatedBy(t) === currentUser?.email
     );
   }, [tasks, currentUser]);
 
@@ -268,11 +275,13 @@ function Dashboard() {
         if (!aOverdue && bOverdue) return 1;
         
         // Then by due date
-        if (a.dueDate && b.dueDate) {
-          return new Date(a.dueDate) - new Date(b.dueDate);
+        const aDueDate = getTaskDueDate(a);
+        const bDueDate = getTaskDueDate(b);
+        if (aDueDate && bDueDate) {
+          return new Date(aDueDate) - new Date(bDueDate);
         }
-        if (a.dueDate) return -1;
-        if (b.dueDate) return 1;
+        if (aDueDate) return -1;
+        if (bDueDate) return 1;
         
         // Then by priority
         const priorityOrder = { High: 0, Medium: 1, Low: 2 };
@@ -304,6 +313,47 @@ function Dashboard() {
   }, [myTeams, userTasks]);
 
   const maxProductivity = Math.max(...productivityData.map(d => d.completed), 1);
+  const hasProductivityHistory = productivityData.some(day => day.completed > 0);
+  const nextDeadline = priorityTasks.find(task => getTaskDueDate(task));
+  const activeCourses = useMemo(() => {
+    const buckets = new Map();
+
+    userTasks
+      .filter(task => task.status !== 'done' && task.status !== 'completed_late')
+      .forEach(task => {
+        const label = getTaskCourseLabel(task);
+        if (!buckets.has(label)) {
+          buckets.set(label, {
+            label,
+            taskCount: 0,
+            urgentCount: 0,
+            attachmentCount: 0,
+            nextTask: null
+          });
+        }
+
+        const bucket = buckets.get(label);
+        bucket.taskCount += 1;
+        bucket.attachmentCount += getTaskAttachmentCount(task);
+        if (isTaskOverdue(task) || isDueToday(task)) {
+          bucket.urgentCount += 1;
+        }
+
+        const taskDueDate = getTaskDueDate(task);
+        if (!bucket.nextTask && taskDueDate) {
+          bucket.nextTask = task;
+        } else if (getTaskDueDate(bucket.nextTask) && taskDueDate && new Date(taskDueDate) < new Date(getTaskDueDate(bucket.nextTask))) {
+          bucket.nextTask = task;
+        }
+      });
+
+    return Array.from(buckets.values())
+      .sort((a, b) => {
+        if (b.urgentCount !== a.urgentCount) return b.urgentCount - a.urgentCount;
+        return a.label.localeCompare(b.label);
+      })
+      .slice(0, 4);
+  }, [userTasks]);
 
   const navigateToTasks = (filter) => {
     navigate('/tasks', { state: { activeFilter: filter } });
@@ -333,14 +383,48 @@ function Dashboard() {
             </p>
           </div>
           <div className="header-actions">
-            <button className="btn btn-secondary" onClick={() => navigate('/tasks')}>
-              <FaTasks style={{ marginRight: '8px' }} /> View Tasks
-            </button>
             <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
-              <FaPlus style={{ marginRight: '8px' }} /> Create Task
+              <FaPlus style={{ marginRight: '8px' }} /> New Task
             </button>
+            <span className="header-shortcut-hint">
+              Quick add: <kbd>Ctrl</kbd> + <kbd>K</kbd>
+            </span>
           </div>
         </div>
+
+        <section className="dashboard-briefing">
+          <div className="briefing-main">
+            <p className="briefing-eyebrow">Today&apos;s Brief</p>
+            <h2>
+              {stats.total === 0
+                ? 'You are starting with a clean slate.'
+                : stats.overdue > 0
+                  ? `You have ${stats.overdue} overdue ${stats.overdue === 1 ? 'task' : 'tasks'} to rescue first.`
+                  : stats.dueToday > 0
+                    ? `${stats.dueToday} ${stats.dueToday === 1 ? 'task is' : 'tasks are'} due today.`
+                    : 'You are in control. Keep the momentum going.'}
+            </h2>
+            <p>
+              {nextDeadline
+                ? `Next meaningful deadline: ${nextDeadline.title} on ${new Date(getTaskDueDate(nextDeadline)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}.`
+                : 'No immediate deadlines on the board. This is a good time to plan ahead.'}
+            </p>
+          </div>
+          <div className="briefing-rail">
+            <button className="briefing-chip" onClick={() => navigateToTasks('pending')}>
+              <strong>{stats.pending}</strong>
+              <span>open tasks</span>
+            </button>
+            <button className="briefing-chip" onClick={() => navigateToTasks('overdue')}>
+              <strong>{stats.overdue}</strong>
+              <span>need attention</span>
+            </button>
+            <button className="briefing-chip" onClick={() => navigate('/teams')}>
+              <strong>{teamStats.length}</strong>
+              <span>active teams</span>
+            </button>
+          </div>
+        </section>
 
         {/* Hero Insight Cards */}
         <div className="insight-cards-grid">
@@ -414,41 +498,54 @@ function Dashboard() {
             <div className="section-header">
               <div className="section-title">
                 <MdTimeline className="section-icon" />
-                <h2>Productivity Timeline</h2>
+                <h2>Momentum</h2>
               </div>
               <span className="section-subtitle">Last 7 days</span>
             </div>
-            <div className="productivity-chart">
-              {productivityData.map((day, index) => (
-                <div className="chart-bar-container" key={index}>
-                  <div className="chart-bar-wrapper">
-                    <div 
-                      className="chart-bar on-time"
-                      style={{ height: `${(day.onTime / maxProductivity) * 100}%` }}
-                    >
-                      {day.onTime > 0 && <span className="bar-value">{day.onTime}</span>}
+            {hasProductivityHistory ? (
+              <>
+                <div className="productivity-chart">
+                  {productivityData.map((day, index) => (
+                    <div className="chart-bar-container" key={index}>
+                      <div className="chart-bar-wrapper">
+                        <div 
+                          className="chart-bar on-time"
+                          style={{ height: `${(day.onTime / maxProductivity) * 100}%` }}
+                        >
+                          {day.onTime > 0 && <span className="bar-value">{day.onTime}</span>}
+                        </div>
+                        <div 
+                          className="chart-bar late"
+                          style={{ height: `${(day.late / maxProductivity) * 100}%` }}
+                        >
+                          {day.late > 0 && <span className="bar-value">{day.late}</span>}
+                        </div>
+                      </div>
+                      <span className="chart-label">{day.date}</span>
                     </div>
-                    <div 
-                      className="chart-bar late"
-                      style={{ height: `${(day.late / maxProductivity) * 100}%` }}
-                    >
-                      {day.late > 0 && <span className="bar-value">{day.late}</span>}
-                    </div>
-                  </div>
-                  <span className="chart-label">{day.date}</span>
+                  ))}
                 </div>
-              ))}
-            </div>
-            <div className="chart-legend">
-              <div className="legend-item">
-                <span className="legend-dot on-time"></span>
-                <span>On Time</span>
+                <div className="chart-legend">
+                  <div className="legend-item">
+                    <span className="legend-dot on-time"></span>
+                    <span>On Time</span>
+                  </div>
+                  <div className="legend-item">
+                    <span className="legend-dot late"></span>
+                    <span>Late</span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="dashboard-empty-state">
+                <FaBolt className="dashboard-empty-icon" />
+                <h3>No history yet</h3>
+                <p>Once you complete a few tasks, your weekly momentum will show up here. For now, capture your first task and get moving.</p>
+                <button className="empty-state-action" onClick={() => setShowCreateModal(true)}>
+                  Create your first task
+                </button>
               </div>
-              <div className="legend-item">
-                <span className="legend-dot late"></span>
-                <span>Late</span>
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Priority Focus Panel */}
@@ -477,14 +574,14 @@ function Dashboard() {
                     <div className="priority-content">
                       <h4>{task.title}</h4>
                       <div className="priority-meta">
-                        {task.dueDate && (
+                        {getTaskDueDate(task) && (
                           <span className={`due-tag ${isTaskOverdue(task) ? 'overdue' : isDueToday(task) ? 'today' : ''}`}>
                             <FaCalendarAlt />
                             {isTaskOverdue(task) 
                               ? 'Overdue' 
                               : isDueToday(task) 
                                 ? 'Due Today'
-                                : new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                                : new Date(getTaskDueDate(task)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
                             }
                           </span>
                         )}
@@ -558,32 +655,46 @@ function Dashboard() {
           </div>
         )}
 
-        {/* Quick Actions CTA */}
-        <div className="dashboard-cta-section">
-          <div className="cta-card" onClick={() => navigate('/tasks')}>
-            <FaTasks className="cta-icon" />
-            <div className="cta-content">
-              <h3>View All Tasks</h3>
-              <p>Manage and organize your work</p>
+        <div className="dashboard-section lanes-section">
+          <div className="section-header">
+            <div className="section-title">
+              <FaTasks className="section-icon priority" />
+              <h2>Course Lanes</h2>
             </div>
-            <FaArrowRight className="cta-arrow" />
+            <span className="section-subtitle">Where your workload is actually coming from</span>
           </div>
-          <div className="cta-card primary" onClick={() => setShowCreateModal(true)}>
-            <FaPlus className="cta-icon" />
-            <div className="cta-content">
-              <h3>Create New Task</h3>
-              <p>Add a new task to your list</p>
+
+          {activeCourses.length === 0 ? (
+            <div className="dashboard-empty-state compact">
+              <FaTrophy className="dashboard-empty-icon" />
+              <h3>You&apos;re all caught up</h3>
+              <p>No active course buckets right now. Go take a nap, then come back when the semester starts swinging again.</p>
             </div>
-            <FaArrowRight className="cta-arrow" />
-          </div>
-          {stats.overdue > 0 && (
-            <div className="cta-card urgent" onClick={() => navigateToTasks('overdue')}>
-              <FaExclamationTriangle className="cta-icon" />
-              <div className="cta-content">
-                <h3>Review Overdue</h3>
-                <p>{stats.overdue} tasks need attention</p>
-              </div>
-              <FaArrowRight className="cta-arrow" />
+          ) : (
+            <div className="course-lanes-grid">
+              {activeCourses.map((bucket) => (
+                <div className="course-lane-card" key={bucket.label}>
+                  <div className="course-lane-header">
+                    <h3>{bucket.label}</h3>
+                    <span>{bucket.taskCount} open</span>
+                  </div>
+                  <div className="course-lane-metrics">
+                    <span className={bucket.urgentCount > 0 ? 'danger' : ''}>
+                      <FaExclamationTriangle />
+                      {bucket.urgentCount} urgent
+                    </span>
+                    <span>
+                      <FaPaperclip />
+                      {bucket.attachmentCount} files
+                    </span>
+                  </div>
+                  <p className="course-lane-next">
+                    {getTaskDueDate(bucket.nextTask)
+                      ? `Next up: ${bucket.nextTask.title} on ${new Date(getTaskDueDate(bucket.nextTask)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+                      : 'No dated task in this lane yet.'}
+                  </p>
+                </div>
+              ))}
             </div>
           )}
         </div>

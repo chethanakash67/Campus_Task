@@ -3,8 +3,8 @@ import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import NotificationCenter from './NotificationCenter';
-import { MdDashboard, MdSettings, MdLogout, MdLeaderboard } from 'react-icons/md';
-import { FaUserFriends, FaCalendarAlt, FaTasks, FaTrophy, FaUser, FaChevronRight, FaBars, FaBolt } from 'react-icons/fa';
+import { MdDashboard, MdSettings, MdLogout } from 'react-icons/md';
+import { FaUserFriends, FaCalendarAlt, FaTasks, FaTrophy, FaUser, FaBars } from 'react-icons/fa';
 import '../pages/Dashboard.css';
 
 function Sidebar() {
@@ -38,7 +38,6 @@ function Sidebar() {
     { path: '/tasks', icon: FaTasks, label: 'Tasks' },
     { path: '/calendar', icon: FaCalendarAlt, label: 'Calendar' },
     { path: '/leaderboard', icon: FaTrophy, label: 'Leaderboard' },
-    { path: '/productivity', icon: FaBolt, label: 'Productivity' },
     { path: '/profile', icon: FaUser, label: 'Profile' },
     { path: '/settings', icon: MdSettings, label: 'Settings' },
   ];
@@ -82,7 +81,6 @@ function Sidebar() {
             <div className="sidebar-user-info">
               <p className="sidebar-user-name">{userName}</p>
               <p className="sidebar-user-role">Member</p>
-              <p className="sidebar-user-points">{currentUser?.points || 0} points</p>
             </div>
           </div>
         </div>
