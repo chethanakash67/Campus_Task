@@ -109,18 +109,22 @@ app.get('/api/debug/email', async (req, res) => {
 // ==================== DATABASE CONNECTION ====================
 const isProduction = process.env.NODE_ENV === 'production';
 const connectionString = process.env.DATABASE_URL;
+const dbSslEnabled = process.env.DB_SSL === 'true'
+  || isProduction
+  || Boolean(connectionString && connectionString.includes('.render.com'));
 
 const poolConfig = connectionString
   ? {
     connectionString,
-    ssl: isProduction ? { rejectUnauthorized: false } : false
+    ssl: dbSslEnabled ? { rejectUnauthorized: false } : false
   }
   : {
     host: process.env.DB_HOST || 'localhost',
     port: process.env.DB_PORT || 5432,
     database: process.env.DB_NAME || 'campustasks',
     user: process.env.DB_USER || 'postgres',
-    password: process.env.DB_PASSWORD || 'your_password'
+    password: process.env.DB_PASSWORD || 'your_password',
+    ssl: dbSslEnabled ? { rejectUnauthorized: false } : false
   };
 
 const pool = new Pool(poolConfig);

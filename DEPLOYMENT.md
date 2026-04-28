@@ -33,9 +33,12 @@ This guide outlines the steps to deploy the CampusTasks application.
     | :--- | :--- |
     | `NODE_ENV` | `production` |
     | `PORT` | `5001` (or leave default, Render usually sets `PORT` automatically) |
+    | `BACKEND_URL` | Your Render backend URL, e.g. `https://campus-task.onrender.com` |
     | `FRONTEND_URL` | Your Vercel URL (e.g., `https://your-app.vercel.app`). *Add this later after Vercel deployment.* |
     | `SESSION_SECRET` | A long random string. |
     | `JWT_SECRET` | A long random string. |
+    | `DATABASE_URL` | Render PostgreSQL connection URL. Use the Internal Database URL only when the web service and database are in the same Render region/network; otherwise use the External Database URL. |
+    | `DB_SSL` | `true` when using Render's External Database URL. |
     | `DB_HOST` | From Render PostgreSQL (Hostname) |
     | `DB_PORT` | `5432` |
     | `DB_NAME` | From Render PostgreSQL (Database) |
@@ -100,4 +103,4 @@ This guide outlines the steps to deploy the CampusTasks application.
     }
     ```
 -   **CORS Errors**: Ensure `FRONTEND_URL` on Render matches the Vercel URL exactly (no trailing slash usually, unless your code handles it).
--   **Database Connection**: Ensure the `DB_` variables on Render are correct. Use the "Internal Database URL" if both are on Render.
+-   **Database Connection**: The app prefers `DATABASE_URL` when it is set. If you see `getaddrinfo ENOTFOUND dpg-...-a`, your backend cannot resolve Render's internal database hostname; switch `DATABASE_URL` to the External Database URL and set `DB_SSL=true`. If you see `SSL/TLS required`, use the External Database URL with `NODE_ENV=production` or `DB_SSL=true`.
