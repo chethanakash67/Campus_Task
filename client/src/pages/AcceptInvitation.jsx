@@ -27,8 +27,11 @@ function AcceptInvitation() {
                     // User not authenticated - store invitation and redirect to login
                     localStorage.setItem('pendingInvitation', token);
                     localStorage.setItem('invitationEmail', response.data.invitee_email);
+                    if (response.data.invitee_name) {
+                        localStorage.setItem('invitationName', response.data.invitee_name);
+                    }
                     setLoading(false);
-                    navigate('/login?from=invitation', { replace: true });
+                    navigate(response.data.invitee_exists ? '/login?from=invitation' : '/signup?from=invitation', { replace: true });
                     return;
                 }
             } catch {
@@ -55,7 +58,10 @@ function AcceptInvitation() {
             // User not logged in - store invitation and redirect to login
             localStorage.setItem('pendingInvitation', token);
             localStorage.setItem('invitationEmail', invitation.invitee_email);
-            navigate('/login?from=invitation');
+            if (invitation.invitee_name) {
+                localStorage.setItem('invitationName', invitation.invitee_name);
+            }
+            navigate(invitation.invitee_exists ? '/login?from=invitation' : '/signup?from=invitation');
             return;
         }
 
@@ -76,6 +82,7 @@ function AcceptInvitation() {
         // Clear pending invitation if it exists
         localStorage.removeItem('pendingInvitation');
         localStorage.removeItem('invitationEmail');
+        localStorage.removeItem('invitationName');
         
         navigate('/teams');
     } catch (err) {
@@ -87,6 +94,9 @@ function AcceptInvitation() {
                 if (confirm('Would you like to sign up with the invitation email instead?')) {
                     localStorage.setItem('pendingInvitation', token);
                     localStorage.setItem('invitationEmail', invitation.invitee_email);
+                    if (invitation.invitee_name) {
+                        localStorage.setItem('invitationName', invitation.invitee_name);
+                    }
                     navigate('/signup?from=invitation');
                 }
             }, 1000);

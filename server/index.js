@@ -492,6 +492,90 @@ function generateOTP() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function buildTeamInvitationEmail({ inviteeName, inviterName, teamName, role, actionUrl }) {
+  const safeInviteeName = escapeHtml(inviteeName || 'there');
+  const safeInviterName = escapeHtml(inviterName || 'A teammate');
+  const safeTeamName = escapeHtml(teamName);
+  const safeRole = escapeHtml(role || 'Member');
+  const safeActionUrl = escapeHtml(actionUrl);
+
+  return `
+    <div style="display:none;max-height:0;overflow:hidden;color:transparent;opacity:0;">
+      ${safeInviterName} invited you to join ${safeTeamName} on CampusTasks.
+    </div>
+    <div style="margin:0;padding:32px 16px;background:#f3f6fb;font-family:Arial,Helvetica,sans-serif;color:#111827;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+        <tr>
+          <td align="center">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;max-width:620px;background:#ffffff;border:1px solid #e5e7eb;border-radius:18px;overflow:hidden;">
+              <tr>
+                <td style="padding:28px 32px;background:#111827;color:#ffffff;">
+                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+                    <tr>
+                      <td>
+                        <div style="font-size:13px;line-height:18px;color:#cbd5e1;text-transform:uppercase;letter-spacing:1.4px;font-weight:700;">CampusTasks</div>
+                        <div style="font-size:24px;line-height:32px;font-weight:800;margin-top:4px;">Team invitation</div>
+                      </td>
+                      <td align="right">
+                        <div style="width:48px;height:48px;line-height:48px;text-align:center;border-radius:14px;background:#ffffff;color:#111827;font-size:18px;font-weight:800;">CT</div>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:34px 32px 30px;">
+                  <h1 style="margin:0 0 10px;color:#111827;font-size:26px;line-height:34px;font-weight:800;">You are invited to join ${safeTeamName}</h1>
+                  <p style="margin:0;color:#4b5563;font-size:16px;line-height:25px;">
+                    Hi ${safeInviteeName}, <strong style="color:#111827;">${safeInviterName}</strong> invited you to collaborate in CampusTasks.
+                  </p>
+
+                  <div style="margin:26px 0;padding:20px;border-radius:16px;background:#f8fafc;border:1px solid #e5e7eb;">
+                    <div style="color:#6b7280;font-size:13px;line-height:18px;text-transform:uppercase;letter-spacing:1.2px;font-weight:700;">Team</div>
+                    <div style="margin-top:8px;color:#111827;font-size:22px;line-height:30px;font-weight:800;">${safeTeamName}</div>
+                    <div style="margin-top:8px;color:#4b5563;font-size:15px;line-height:22px;">Role: <strong>${safeRole}</strong></div>
+                  </div>
+
+                  <table role="presentation" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:0 0 22px;">
+                    <tr>
+                      <td style="border-radius:12px;background:#111827;">
+                        <a href="${safeActionUrl}" style="display:inline-block;padding:14px 24px;color:#ffffff;text-decoration:none;font-size:16px;line-height:20px;font-weight:800;border-radius:12px;">
+                          Accept Invitation
+                        </a>
+                      </td>
+                    </tr>
+                  </table>
+
+                  <p style="margin:0 0 8px;color:#6b7280;font-size:14px;line-height:22px;">
+                    If the button does not work, copy and paste this link into your browser:
+                  </p>
+                  <p style="margin:0;word-break:break-all;color:#374151;font-size:13px;line-height:20px;">
+                    <a href="${safeActionUrl}" style="color:#2563eb;text-decoration:underline;">${safeActionUrl}</a>
+                  </p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:20px 32px;background:#f9fafb;border-top:1px solid #e5e7eb;color:#6b7280;font-size:13px;line-height:20px;">
+                  New users will be guided to sign up first. Existing users will be guided to sign in, then returned to this invitation.
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </div>
+  `;
+}
+
 async function sendOTPEmail(email, name, otp, purpose = 'verify') {
   if (!emailConfigured) {
     console.warn(`⚠️  Email not configured. Mock OTP for ${email}: ${otp}`);
@@ -506,19 +590,76 @@ async function sendOTPEmail(email, name, otp, purpose = 'verify') {
     const greeting = purpose === 'login'
       ? `Welcome back, ${name}!`
       : `Welcome to CampusTasks, ${name}!`;
+    const safeName = escapeHtml(name || 'there');
+    const safeGreeting = escapeHtml(greeting);
+    const otpDigits = otp.split('').map((digit) => `
+      <span style="display:inline-block;width:44px;height:52px;line-height:52px;margin:0 4px;border-radius:12px;background:#f8fafc;border:1px solid #d7dde8;color:#111827;font-size:26px;font-weight:800;letter-spacing:0;text-align:center;">
+        ${escapeHtml(digit)}
+      </span>
+    `).join('');
 
     const sent = await sendEmail({
       to: email,
       toName: name,
       subject: subject,
       html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2>${greeting}</h2>
-          <p>Your verification code is:</p>
-          <div style="background-color: #f4f4f4; padding: 20px; text-align: center; font-size: 32px; font-weight: bold; letter-spacing: 5px; margin: 20px 0;">
-            ${otp}
-          </div>
-          <p>This code will expire in 10 minutes.</p>
+        <div style="display:none;max-height:0;overflow:hidden;color:transparent;opacity:0;">
+          Your CampusTasks verification code is ${otp}. It expires in 10 minutes.
+        </div>
+        <div style="margin:0;padding:32px 16px;background:#f3f6fb;font-family:Arial,Helvetica,sans-serif;color:#111827;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+            <tr>
+              <td align="center">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;max-width:620px;background:#ffffff;border:1px solid #e5e7eb;border-radius:18px;overflow:hidden;">
+                  <tr>
+                    <td style="padding:28px 32px;background:#111827;color:#ffffff;">
+                      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+                        <tr>
+                          <td style="vertical-align:middle;">
+                            <div style="font-size:13px;line-height:18px;color:#cbd5e1;text-transform:uppercase;letter-spacing:1.4px;font-weight:700;">CampusTasks</div>
+                            <div style="font-size:24px;line-height:32px;font-weight:800;margin-top:4px;">Email verification</div>
+                          </td>
+                          <td align="right" style="vertical-align:middle;">
+                            <div style="width:48px;height:48px;line-height:48px;text-align:center;border-radius:14px;background:#ffffff;color:#111827;font-size:18px;font-weight:800;">CT</div>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:34px 32px 30px;">
+                      <h1 style="margin:0 0 10px;color:#111827;font-size:26px;line-height:34px;font-weight:800;">${safeGreeting}</h1>
+                      <p style="margin:0;color:#4b5563;font-size:16px;line-height:25px;">
+                        Use the code below to ${purpose === 'login' ? 'finish signing in to' : 'verify'} your CampusTasks account.
+                      </p>
+
+                      <div style="margin:28px 0 24px;padding:24px;border-radius:16px;background:#f8fafc;border:1px solid #e5e7eb;text-align:center;">
+                        <div style="margin-bottom:14px;color:#6b7280;font-size:13px;line-height:18px;text-transform:uppercase;letter-spacing:1.2px;font-weight:700;">Verification code</div>
+                        <div style="white-space:nowrap;">${otpDigits}</div>
+                      </div>
+
+                      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:0 0 22px;">
+                        <tr>
+                          <td style="padding:14px 16px;border-radius:12px;background:#eef6ff;border:1px solid #dbeafe;color:#1e3a8a;font-size:14px;line-height:21px;">
+                            This code expires in <strong>10 minutes</strong>. If you did not request this email, you can safely ignore it.
+                          </td>
+                        </tr>
+                      </table>
+
+                      <p style="margin:0;color:#6b7280;font-size:14px;line-height:22px;">
+                        Sent to <strong style="color:#374151;">${escapeHtml(email)}</strong> for ${safeName}.
+                      </p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:20px 32px;background:#f9fafb;border-top:1px solid #e5e7eb;color:#6b7280;font-size:13px;line-height:20px;">
+                      CampusTasks keeps your account secure with one-time verification codes.
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
         </div>
       `,
       templateParams: {
@@ -1333,52 +1474,53 @@ app.put('/api/teams/:id', authenticateToken, async (req, res) => {
       const roleToAssign = member.role || 'Member';
       const teamName = name || team.name;
 
+      const inviteToken = jwt.sign(
+        { teamId: Number(id), email },
+        process.env.JWT_SECRET || 'your_jwt_secret_key',
+        { expiresIn: '7d' }
+      );
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+      await client.query(
+        `INSERT INTO team_invitations (team_id, inviter_id, invitee_email, invitee_name, role, token, expires_at, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')`,
+        [id, req.user.id, email, member.name || null, roleToAssign, inviteToken, expiresAt]
+      );
+
       if (userCheck.rows.length > 0) {
-        const userId = userCheck.rows[0].id;
-        await client.query(
-          'INSERT INTO team_members (team_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
-          [id, userId, roleToAssign]
-        );
         await createNotification(
-          userId,
+          userCheck.rows[0].id,
           'team_invite',
-          'Added to Team',
-          `You've been added to "${teamName}"`,
-          '/teams',
+          'New Team Invitation',
+          `${req.user.name || req.user.email} invited you to join "${teamName}"`,
+          `/accept-invitation?token=${inviteToken}`,
           { teamId: id, teamName }
         );
-      } else {
-        const inviteToken = jwt.sign(
-          { teamId: Number(id), email },
-          process.env.JWT_SECRET || 'your_jwt_secret_key',
-          { expiresIn: '7d' }
-        );
-        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      }
 
-        await client.query(
-          `INSERT INTO team_invitations (team_id, inviter_id, invitee_email, invitee_name, role, token, expires_at, status)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')`,
-          [id, req.user.id, email, member.name || null, roleToAssign, inviteToken, expiresAt]
-        );
-
-        if (emailConfigured) {
-          await sendEmail({
-            to: email,
-            toName: member.name,
-            subject: `Join "${teamName}" on CampusTasks`,
-            html: `
-              <h2>Team Invitation</h2>
-              <p>${req.user.name || req.user.email} invited you to join <strong>${teamName}</strong>.</p>
-              <a href="${FRONTEND_URL}/accept-invitation?token=${inviteToken}">Accept Invitation</a>
-            `,
-            templateParams: {
-              email_type: 'team_invitation',
-              team_name: teamName,
-              inviter_name: req.user.name || req.user.email,
-              action_url: `${FRONTEND_URL}/accept-invitation?token=${inviteToken}`
-            }
-          });
-        }
+      if (emailConfigured) {
+        const actionUrl = `${FRONTEND_URL}/accept-invitation?token=${inviteToken}`;
+        await sendEmail({
+          to: email,
+          toName: member.name || userCheck.rows[0]?.name,
+          subject: `Join "${teamName}" on CampusTasks`,
+          html: buildTeamInvitationEmail({
+            inviteeName: member.name || userCheck.rows[0]?.name,
+            inviterName: req.user.name || req.user.email,
+            teamName,
+            role: roleToAssign,
+            actionUrl
+          }),
+          text: `${req.user.name || req.user.email} invited you to join "${teamName}" on CampusTasks. Accept invitation: ${actionUrl}`,
+          templateParams: {
+            email_type: 'team_invitation',
+            team_name: teamName,
+            inviter_name: req.user.name || req.user.email,
+            role: roleToAssign,
+            action_url: actionUrl,
+            invite_url: actionUrl
+          }
+        });
       }
     }
 
@@ -1648,20 +1790,27 @@ app.post('/api/teams', authenticateToken, async (req, res) => {
         if (emailConfigured) {
           try {
             const inviter = await client.query('SELECT name FROM users WHERE id = $1', [req.user.id]);
+            const inviterName = inviter.rows[0]?.name || req.user.email;
+            const actionUrl = `${FRONTEND_URL}/accept-invitation?token=${token}`;
             await sendEmail({
               to: member.email,
               toName: member.name,
               subject: `You're invited to join ${team.name} on CampusTasks`,
-              html: `
-                <h2>Team Invitation</h2>
-                <p>${inviter.rows[0].name} has invited you to join "${team.name}".</p>
-                <a href="${FRONTEND_URL}/accept-invitation?token=${token}">Accept Invitation</a>
-              `,
+              html: buildTeamInvitationEmail({
+                inviteeName: member.name,
+                inviterName,
+                teamName: team.name,
+                role: member.role || 'Member',
+                actionUrl
+              }),
+              text: `${inviterName} invited you to join "${team.name}" on CampusTasks. Accept invitation: ${actionUrl}`,
               templateParams: {
                 email_type: 'team_invitation',
                 team_name: team.name,
-                inviter_name: inviter.rows[0].name,
-                action_url: `${FRONTEND_URL}/accept-invitation?token=${token}`
+                inviter_name: inviterName,
+                role: member.role || 'Member',
+                action_url: actionUrl,
+                invite_url: actionUrl
               }
             });
           } catch (emailError) {
@@ -1829,6 +1978,7 @@ app.get('/api/teams/invitation/:token', async (req, res) => {
         t.description as team_description,
         t.color as team_color,
         u.name as inviter_name,
+        EXISTS(SELECT 1 FROM users invitee WHERE LOWER(invitee.email) = LOWER(ti.invitee_email)) as invitee_exists,
         (SELECT COUNT(*) FROM team_members WHERE team_id = t.id) as member_count,
         (SELECT COUNT(*) FROM tasks WHERE team_id = t.id AND status != 'done') as task_count
       FROM team_invitations ti

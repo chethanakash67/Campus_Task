@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { AlertCircle, ArrowLeft } from 'lucide-react';
@@ -17,6 +17,20 @@ function Signup() {
   const [loading, setLoading] = useState(false);
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+  const hasPendingInvitation = Boolean(localStorage.getItem('pendingInvitation'));
+
+  useEffect(() => {
+    const invitationEmail = localStorage.getItem('invitationEmail');
+    const invitationName = localStorage.getItem('invitationName');
+
+    if (invitationEmail) {
+      setEmail(invitationEmail);
+    }
+
+    if (invitationName) {
+      setName(invitationName);
+    }
+  }, []);
 
   const handleGoogleSignup = () => {
     window.location.href = `${API_URL.replace('/api', '')}/api/auth/google`;
@@ -90,7 +104,11 @@ function Signup() {
           <div className="auth-form-shell">
             <header className="auth-header auth-header-compact">
               <h2 className="auth-title">Create Account</h2>
-              <p className="auth-subtitle">Sign up to start organizing your semester</p>
+              <p className="auth-subtitle">
+                {hasPendingInvitation
+                  ? 'Sign up with the invited email to continue'
+                  : 'Sign up to start organizing your semester'}
+              </p>
             </header>
 
             <button
@@ -158,7 +176,7 @@ function Signup() {
                     setEmail(e.target.value);
                     setError('');
                   }}
-                  disabled={loading}
+                  disabled={loading || hasPendingInvitation}
                 />
               </label>
 

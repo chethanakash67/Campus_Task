@@ -47,23 +47,7 @@ function Login() {
 
       const pendingInvitation = localStorage.getItem('pendingInvitation');
       if (pendingInvitation) {
-        try {
-          const inviteResponse = await axios.post(
-            `${API_URL}/teams/accept-invitation`,
-            { token: pendingInvitation, userId: response.data.user.id },
-            { headers: { Authorization: `Bearer ${response.data.token}` } }
-          );
-
-          localStorage.removeItem('pendingInvitation');
-          localStorage.removeItem('invitationEmail');
-          alert(inviteResponse.data.message);
-          navigate('/teams', { replace: true });
-        } catch (inviteError) {
-          console.error('Error accepting invitation:', inviteError);
-          localStorage.removeItem('pendingInvitation');
-          localStorage.removeItem('invitationEmail');
-          navigate('/dashboard', { replace: true });
-        }
+        navigate(`/accept-invitation?token=${encodeURIComponent(pendingInvitation)}`, { replace: true });
       } else {
         navigate('/dashboard', { replace: true });
       }
@@ -205,7 +189,13 @@ function Login() {
             </form>
 
             <p className="auth-footer auth-footer-inline">
-              Don&apos;t have an account? <Link to="/signup" className="auth-link">Sign Up</Link>
+              Don&apos;t have an account?{' '}
+              <Link
+                to={localStorage.getItem('pendingInvitation') ? '/signup?from=invitation' : '/signup'}
+                className="auth-link"
+              >
+                Sign Up
+              </Link>
             </p>
           </div>
         </section>

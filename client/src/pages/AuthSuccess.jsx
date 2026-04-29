@@ -34,37 +34,7 @@ function AuthSuccess() {
         // Check for pending invitation
         const pendingInvitation = localStorage.getItem('pendingInvitation');
         if (pendingInvitation) {
-          try {
-            // Accept the invitation
-            const inviteResponse = await axios.post(`${API_URL}/teams/accept-invitation`, 
-              { token: pendingInvitation, userId: user.id },
-              { headers: { Authorization: `Bearer ${token}` }}
-            );
-            
-            // Clear pending invitation
-            localStorage.removeItem('pendingInvitation');
-            localStorage.removeItem('invitationEmail');
-            
-            // Show appropriate message
-            alert(inviteResponse.data.message);
-            
-            navigate('/teams', { replace: true });
-          } catch (inviteError) {
-            console.error('Error accepting invitation:', inviteError);
-            const errorMsg = inviteError.response?.data?.error || 'Failed to accept invitation';
-            // If email mismatch, clear invitation and go to dashboard
-            if (errorMsg.includes('different email')) {
-              localStorage.removeItem('pendingInvitation');
-              localStorage.removeItem('invitationEmail');
-              alert(errorMsg + '\n\nYou can accept the invitation with the correct email account.');
-              navigate('/dashboard', { replace: true });
-            } else {
-              // Other errors - still clear and go to dashboard
-              localStorage.removeItem('pendingInvitation');
-              localStorage.removeItem('invitationEmail');
-              navigate('/dashboard', { replace: true });
-            }
-          }
+          navigate(`/accept-invitation?token=${encodeURIComponent(pendingInvitation)}`, { replace: true });
         } else {
           // No pending invitation - navigate to dashboard
           navigate('/dashboard', { replace: true });

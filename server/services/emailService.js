@@ -71,6 +71,10 @@ function stripHtml(html) {
   return String(html || '')
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (_match, href, label) => {
+      const linkText = label.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      return ` ${linkText || 'Open link'}: ${href} `;
+    })
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')

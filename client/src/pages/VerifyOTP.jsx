@@ -2,11 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { AlertCircle, ArrowLeft, CheckCircle, Clock } from 'lucide-react';
+import { useApp } from '../context/AppContext';
 import '../styles/auth.css';
 
 function VerifyOTP() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { login } = useApp();
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -82,8 +84,8 @@ function VerifyOTP() {
       // Get stored password and name from signup
       const pendingPassword = localStorage.getItem('pendingPassword');
       const pendingName = localStorage.getItem('pendingName');
-//hello
-      await axios.post(API_URL + '/auth/verify-register', {
+
+      const response = await axios.post(API_URL + '/auth/verify-register', {
         email: email,
         otp: otpValue,
         name: pendingName,
@@ -91,9 +93,21 @@ function VerifyOTP() {
       });
 
       setSuccess('Email verified successfully!');
+      const pendingInvitation = localStorage.getItem('pendingInvitation');
       localStorage.removeItem('pendingVerificationEmail');
       localStorage.removeItem('pendingPassword');
       localStorage.removeItem('pendingName');
+
+      if (pendingInvitation && response.data?.token && response.data?.user) {
+        localStorage.setItem('campusToken', response.data.token);
+        localStorage.setItem('campusUser', JSON.stringify(response.data.user));
+        login(response.data.user, response.data.token);
+
+        setTimeout(() => {
+          navigate(`/accept-invitation?token=${encodeURIComponent(pendingInvitation)}`, { replace: true });
+        }, 800);
+        return;
+      }
 
       setTimeout(() => {
         navigate('/login', { state: { verified: true } });
