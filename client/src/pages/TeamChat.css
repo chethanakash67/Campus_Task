@@ -239,6 +239,13 @@
   background: #333333;
 }
 
+.message-link {
+  color: inherit;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .chat-search-wrap {
   display: flex;
   align-items: center;

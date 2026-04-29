@@ -250,31 +250,28 @@ function TeamChat() {
     await fetchMessages();
   };
 
-  const handleStartMeet = async () => {
+  const openCampusMeeting = async (mode = 'video') => {
     try {
       const room = `campustasks-${teamId}-${Date.now()}`;
-      const meetUrl = `https://meet.jit.si/${room}`;
-      window.open(meetUrl, '_blank', 'noopener,noreferrer');
-      await postSystemLinkMessage(`🎥 ${currentUser?.name || 'A teammate'} started a video meeting:`, meetUrl);
-      addToast('Meet link shared in chat', 'success');
+      const meetingPath = `/teams/${teamId}/meeting/${room}${mode === 'audio' ? '?mode=audio' : ''}`;
+      const meetingUrl = `${window.location.origin}${meetingPath}`;
+      const starterPath = `${meetingPath}${mode === 'audio' ? '&' : '?'}starter=1`;
+      const label = mode === 'audio'
+        ? `${currentUser?.name || 'A teammate'} started a CampusTasks audio room:`
+        : `${currentUser?.name || 'A teammate'} started a CampusTasks meeting:`;
+
+      await postSystemLinkMessage(label, meetingUrl);
+      addToast('Meeting shared in chat. Join to start it and schedule the email invite.', 'success');
+      navigate(starterPath);
     } catch (error) {
       console.error('Error starting meeting:', error);
-      addToast('Failed to create meet link', 'error');
+      addToast('Failed to create CampusTasks meeting', 'error');
     }
   };
 
-  const handleStartCall = async () => {
-    try {
-      const room = `campustasks-audio-${teamId}-${Date.now()}`;
-      const callUrl = `https://meet.jit.si/${room}#config.startWithVideoMuted=true&config.startAudioOnly=true`;
-      window.open(callUrl, '_blank', 'noopener,noreferrer');
-      await postSystemLinkMessage(`📞 ${currentUser?.name || 'A teammate'} started an audio call:`, callUrl);
-      addToast('Call link shared in chat', 'success');
-    } catch (error) {
-      console.error('Error starting call:', error);
-      addToast('Failed to create call link', 'error');
-    }
-  };
+  const handleStartMeet = () => openCampusMeeting('video');
+
+  const handleStartCall = () => openCampusMeeting('audio');
 
   const handleEditMessage = async () => {
     if (!editingMessage || !newMessage.trim()) return;
@@ -335,6 +332,39 @@ function TeamChat() {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
+  const renderMessageText = (text = '') => {
+    const parts = String(text).split(/(https?:\/\/[^\s]+)/g);
+
+    return parts.map((part, index) => {
+      if (!part.startsWith('http')) return part;
+
+      let url;
+      try {
+        url = new URL(part);
+      } catch {
+        return part;
+      }
+
+      const isCampusTasksLink = url.origin === window.location.origin;
+      return (
+        <a
+          key={`${part}-${index}`}
+          href={part}
+          className="message-link"
+          target={isCampusTasksLink ? undefined : '_blank'}
+          rel={isCampusTasksLink ? undefined : 'noopener noreferrer'}
+          onClick={(event) => {
+            if (!isCampusTasksLink) return;
+            event.preventDefault();
+            navigate(`${url.pathname}${url.search}${url.hash}`);
+          }}
+        >
+          {isCampusTasksLink ? 'Open CampusTasks meeting' : part}
+        </a>
+      );
+    });
+  };
+
   const renderMessage = (msg, idx) => {
     const isCurrentUser = msg.user_id === currentUser?.id;
     const showAvatar = idx === 0 || messages[idx - 1].user_id !== msg.user_id;
@@ -372,7 +402,7 @@ function TeamChat() {
           )}
           
           <div className="message-bubble">
-            {msg.message}
+            {renderMessageText(msg.message)}
             {msg.isEdited && <span className="edited-badge">(edited)</span>}
           </div>
 

@@ -15,6 +15,7 @@ import AuthSuccess from './pages/AuthSuccess';
 import AcceptInvitation from './pages/AcceptInvitation';
 import AssignedTasks from './pages/AssignedTasks';
 import TeamChat from './pages/TeamChat';
+import TeamMeeting from './pages/TeamMeeting';
 import Dashboard from './pages/Dashboard';
 import Teams from './pages/Teams';
 import Calendar from './pages/Calendar';
@@ -40,6 +41,7 @@ function App() {
           <Route path="/tasks" element={<AssignedTasks />} />
           <Route path="/assigned-tasks" element={<AssignedTasks />} />
           <Route path="/teams/:teamId/chat" element={<TeamChat />} />
+          <Route path="/teams/:teamId/meeting/:roomId" element={<TeamMeeting />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/teams" element={<Teams />} />
           <Route path="/calendar" element={<Calendar />} />
