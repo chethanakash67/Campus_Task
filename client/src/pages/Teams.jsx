@@ -85,12 +85,18 @@ function Teams() {
     }
   }, [location.search]);
 
+  const getTaskTeamId = (task) => task.teamId ?? task.team_id;
+
+  const getTasksForTeam = (teamId) => (
+    tasks.filter(task => Number(getTaskTeamId(task)) === Number(teamId))
+  );
+
   // Get team statistics
   const getTeamStats = (teamId) => {
-    const teamTasks = tasks.filter(t => t.teamId === teamId);
+    const teamTasks = getTasksForTeam(teamId);
     return {
       total: teamTasks.length,
-      completed: teamTasks.filter(t => t.status === 'done').length,
+      completed: teamTasks.filter(t => t.status === 'done' || t.status === 'completed').length,
       inProgress: teamTasks.filter(t => t.status === 'in-progress').length,
       pending: teamTasks.filter(t => t.status === 'todo').length
     };
@@ -317,7 +323,7 @@ function Teams() {
 
   // Get tasks for a specific team
   const getTeamTasks = (teamId) => {
-    return tasks.filter(t => t.teamId === teamId).slice(0, 5); // Show first 5 tasks
+    return getTasksForTeam(teamId).slice(0, 5); // Show first 5 tasks
   };
 
   const handleJoinSubmit = async (e) => {
@@ -424,14 +430,21 @@ function Teams() {
                   <div
                     key={team.id}
                     className={`team-list-item ${isExpanded ? 'expanded' : ''}`}
-                    onClick={(e) => {
-                      // Prevent navigation if clicking on action buttons or their children
-                      if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.tasks-toggle-btn')) return;
-                      navigate(`/teams/${team.id}/chat`);
-                    }}
-                    style={{ cursor: 'pointer' }}
                   >
-                    <div className="team-item-main">
+                    <div
+                      className="team-item-main"
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={isExpanded}
+                      onClick={() => toggleExpandTeam(team.id)}
+                      onKeyDown={(e) => {
+                        if (e.target !== e.currentTarget) return;
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          toggleExpandTeam(team.id);
+                        }
+                      }}
+                    >
                       <div className="team-item-left">
                         <div className={`team-avatar ${team.color}`}>
                           <MdGroups />
@@ -451,6 +464,9 @@ function Teams() {
                             </span>
                             <span className={`meta-item visibility ${team.is_public ? 'public' : 'private'}`}>
                               {team.is_public ? 'Public' : 'Private'}
+                            </span>
+                            <span className="team-expand-hint">
+                              {isExpanded ? 'Hide details' : 'View details'}
                             </span>
                           </div>
                         </div>
@@ -527,9 +543,10 @@ function Teams() {
                       </div>
                     </div>
 
-                    {/* Progress Bar */}
-                    {
-                      stats.total > 0 && (
+                    {isExpanded && (
+                      <div className="team-details-panel">
+                        {/* Progress Bar */}
+                        {stats.total > 0 && (
                         <div className="team-progress-section">
                           <div className="progress-bar-container">
                             <div
@@ -541,41 +558,28 @@ function Teams() {
                             {Math.round((stats.completed / stats.total) * 100)}% complete
                           </span>
                         </div>
-                      )
-                    }
+                        )}
 
-                    {/* Expandable Tasks Preview */}
-                    {
-                      teamTasks.length > 0 && (
+                        {/* Tasks Preview */}
+                        {teamTasks.length > 0 && (
                         <div className="team-tasks-section">
-                          <button
-                            className="tasks-toggle-btn"
-                            onClick={() => toggleExpandTeam(team.id)}
-                          >
-                            <span>Recent Tasks ({teamTasks.length})</span>
-                            <span className="toggle-arrow">{isExpanded ? '▲' : '▼'}</span>
-                          </button>
-
-                          {isExpanded && (
-                            <div className="tasks-list-compact">
-                              {teamTasks.map(task => (
-                                <div key={task.id} className="task-list-item-compact">
-                                  <span className={`priority-dot ${task.priority.toLowerCase()}`}></span>
-                                  <span className="task-title-compact">{task.title}</span>
-                                  <span className={`status-badge ${task.status}`}>
-                                    {task.status.replace('-', ' ')}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                          <div className="team-section-title">Recent Tasks ({teamTasks.length})</div>
+                          <div className="tasks-list-compact">
+                            {teamTasks.map(task => (
+                              <div key={task.id} className="task-list-item-compact">
+                                <span className={`priority-dot ${(task.priority || 'medium').toLowerCase()}`}></span>
+                                <span className="task-title-compact">{task.title}</span>
+                                <span className={`status-badge ${task.status}`}>
+                                  {task.status?.replace('-', ' ')}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      )
-                    }
+                        )}
 
-                    {/* Team Code + Join Link */}
-                    {
-                      team.team_code && (
+                        {/* Team Code + Join Link */}
+                        {team.team_code && (
                         <div className="team-code-section">
                           <div className="team-code-info">
                             <span className="team-code-label">Team Code</span>
@@ -584,27 +588,31 @@ function Teams() {
                           <div className="team-code-actions">
                             <button
                               className="btn btn-secondary btn-small"
-                              onClick={() => copyToClipboard(team.team_code, 'Team code copied')}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                copyToClipboard(team.team_code, 'Team code copied');
+                              }}
                             >
                               Copy Code
                             </button>
                             <button
                               className="btn btn-secondary btn-small"
-                              onClick={() => copyToClipboard(
-                                `${window.location.origin}/teams?code=${team.team_code}`,
-                                'Join link copied'
-                              )}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                copyToClipboard(
+                                  `${window.location.origin}/teams?code=${team.team_code}`,
+                                  'Join link copied'
+                                );
+                              }}
                             >
                               Copy Join Link
                             </button>
                           </div>
                         </div>
-                      )
-                    }
+                        )}
 
-                    {/* Join Requests (Private Team Owner Only) */}
-                    {
-                      team.is_owner && !team.is_public && (
+                        {/* Join Requests (Private Team Owner Only) */}
+                        {team.is_owner && !team.is_public && (
                         <div className="team-join-requests">
                           <div className="join-requests-header">
                             <span>Join Requests</span>
@@ -641,10 +649,9 @@ function Teams() {
                             </div>
                           )}
                         </div>
-                      )
-                    }
+                        )}
 
-                    <div className="team-join-requests">
+                        <div className="team-join-requests">
                       <div className="join-requests-header">
                         <span>Daily Stand-up</span>
                         <span className="join-requests-count">
@@ -710,7 +717,9 @@ function Teams() {
                           ))}
                         </div>
                       )}
+                        </div>
                     </div>
+                    )}
                   </div>
                 );
               })}

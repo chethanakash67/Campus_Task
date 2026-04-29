@@ -189,9 +189,19 @@ export const AppProvider = ({ children }) => {
       const response = await axios.get(`${API_URL}/tasks`, {
         headers: { Authorization: `Bearer ${authToken}` }
       });
-      setTasks(response.data);
+      const normalizedTasks = response.data.map(task => ({
+        ...task,
+        teamId: task.teamId ?? task.team_id,
+        teamName: task.teamName ?? task.team_name,
+        taskType: task.taskType ?? task.task_type,
+        dueDate: task.dueDate ?? task.due_date,
+        courseName: task.courseName ?? task.course_name
+      }));
+      setTasks(normalizedTasks);
+      return normalizedTasks;
     } catch (error) {
       console.error('Error fetching tasks:', error);
+      return [];
     }
   };
 
