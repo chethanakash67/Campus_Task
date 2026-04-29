@@ -53,6 +53,9 @@ app.use(passport.session());
 // ==================== EMAIL CONFIGURATION ====================
 const emailConfigured = isEmailConfigured();
 const emailStatus = getEmailStatus();
+const pendingMeetingEmails = new Map();
+const activeMeetingRooms = new Map();
+const MEETING_PRESENCE_TTL_MS = 20000;
 
 if (emailConfigured) {
   console.log('✅ EmailJS is configured for outbound emails');
@@ -501,6 +504,96 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+function getMeetingKey(teamId, roomId) {
+  return `${teamId}:${roomId}`;
+}
+
+function isValidMeetingRoomId(roomId) {
+  return Boolean(roomId && /^[a-zA-Z0-9_-]+$/.test(roomId));
+}
+
+function normalizeMeetingDeviceState(payload = {}) {
+  return {
+    micOn: Boolean(payload.micOn),
+    cameraOn: Boolean(payload.cameraOn),
+    screenOn: Boolean(payload.screenOn)
+  };
+}
+
+function pruneMeetingParticipants(roomKey) {
+  const room = activeMeetingRooms.get(roomKey);
+  if (!room) return null;
+
+  const now = Date.now();
+  for (const [userId, participant] of room.entries()) {
+    if (now - participant.lastSeen > MEETING_PRESENCE_TTL_MS) {
+      room.delete(userId);
+    }
+  }
+
+  if (room.size === 0) {
+    activeMeetingRooms.delete(roomKey);
+    return null;
+  }
+
+  return room;
+}
+
+function serializeMeetingParticipants(teamId, roomId) {
+  const roomKey = getMeetingKey(teamId, roomId);
+  const room = pruneMeetingParticipants(roomKey);
+  if (!room) return [];
+
+  return Array.from(room.values())
+    .sort((a, b) => a.joinedAt - b.joinedAt)
+    .map((participant) => ({
+      id: participant.id,
+      name: participant.name,
+      email: participant.email,
+      avatar: participant.avatar,
+      role: participant.role,
+      micOn: participant.micOn,
+      cameraOn: participant.cameraOn,
+      screenOn: participant.screenOn,
+      joinedAt: new Date(participant.joinedAt).toISOString(),
+      lastSeen: new Date(participant.lastSeen).toISOString()
+    }));
+}
+
+async function getMeetingMember(teamId, userId) {
+  const result = await pool.query(
+    `SELECT u.id, u.name, u.email, u.avatar, tm.role
+     FROM team_members tm
+     JOIN users u ON u.id = tm.user_id
+     WHERE tm.team_id = $1 AND tm.user_id = $2`,
+    [teamId, userId]
+  );
+
+  return result.rows[0] || null;
+}
+
+function upsertMeetingParticipant(teamId, roomId, member, deviceState) {
+  const roomKey = getMeetingKey(teamId, roomId);
+  const room = pruneMeetingParticipants(roomKey) || new Map();
+  const participantKey = String(member.id);
+  const existing = room.get(participantKey);
+  const now = Date.now();
+
+  room.set(participantKey, {
+    id: member.id,
+    name: member.name || member.email || 'Teammate',
+    email: member.email,
+    avatar: member.avatar,
+    role: member.role || 'Member',
+    ...deviceState,
+    joinedAt: existing?.joinedAt || now,
+    lastSeen: now
+  });
+
+  activeMeetingRooms.set(roomKey, room);
+  return serializeMeetingParticipants(teamId, roomId);
+}
+
 function buildTeamInvitationEmail({ inviteeName, inviterName, teamName, role, actionUrl }) {
   const safeInviteeName = escapeHtml(inviteeName || 'there');
   const safeInviterName = escapeHtml(inviterName || 'A teammate');
@@ -566,6 +659,63 @@ function buildTeamInvitationEmail({ inviteeName, inviterName, teamName, role, ac
               <tr>
                 <td style="padding:20px 32px;background:#f9fafb;border-top:1px solid #e5e7eb;color:#6b7280;font-size:13px;line-height:20px;">
                   New users will be guided to sign up first. Existing users will be guided to sign in, then returned to this invitation.
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </div>
+  `;
+}
+
+function buildMeetingInviteEmail({ recipientName, starterName, teamName, meetingUrl, mode }) {
+  const safeRecipientName = escapeHtml(recipientName || 'there');
+  const safeStarterName = escapeHtml(starterName || 'A teammate');
+  const safeTeamName = escapeHtml(teamName || 'your team');
+  const safeMeetingUrl = escapeHtml(meetingUrl);
+  const isAudio = mode === 'audio';
+  const meetingLabel = isAudio ? 'audio room' : 'meeting room';
+
+  return `
+    <div style="display:none;max-height:0;overflow:hidden;color:transparent;opacity:0;">
+      ${safeStarterName} started a CampusTasks ${meetingLabel} for ${safeTeamName}.
+    </div>
+    <div style="margin:0;padding:32px 16px;background:#f3f6fb;font-family:Arial,Helvetica,sans-serif;color:#111827;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+        <tr>
+          <td align="center">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;max-width:620px;background:#ffffff;border:1px solid #e5e7eb;border-radius:18px;overflow:hidden;">
+              <tr>
+                <td style="padding:28px 32px;background:#111827;color:#ffffff;">
+                  <div style="font-size:13px;line-height:18px;color:#cbd5e1;text-transform:uppercase;letter-spacing:1.4px;font-weight:700;">CampusTasks</div>
+                  <div style="font-size:24px;line-height:32px;font-weight:800;margin-top:4px;">Team ${isAudio ? 'audio call' : 'meeting'} started</div>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:34px 32px 30px;">
+                  <h1 style="margin:0 0 10px;color:#111827;font-size:26px;line-height:34px;font-weight:800;">Join ${safeTeamName}</h1>
+                  <p style="margin:0;color:#4b5563;font-size:16px;line-height:25px;">
+                    Hi ${safeRecipientName}, <strong style="color:#111827;">${safeStarterName}</strong> started a CampusTasks ${meetingLabel}.
+                  </p>
+                  <p style="margin:14px 0 26px;color:#4b5563;font-size:15px;line-height:24px;">
+                    This email was delayed by one minute to avoid accidental meeting starts.
+                  </p>
+                  <table role="presentation" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:0 0 22px;">
+                    <tr>
+                      <td style="border-radius:12px;background:#111827;">
+                        <a href="${safeMeetingUrl}" style="display:inline-block;padding:14px 24px;color:#ffffff;text-decoration:none;font-size:16px;line-height:20px;font-weight:800;border-radius:12px;">
+                          Join CampusTasks ${isAudio ? 'Call' : 'Meeting'}
+                        </a>
+                      </td>
+                    </tr>
+                  </table>
+                  <p style="margin:0 0 8px;color:#6b7280;font-size:14px;line-height:22px;">
+                    If the button does not work, copy and paste this link:
+                  </p>
+                  <p style="margin:0;word-break:break-all;color:#374151;font-size:13px;line-height:20px;">
+                    <a href="${safeMeetingUrl}" style="color:#2563eb;text-decoration:underline;">${safeMeetingUrl}</a>
+                  </p>
                 </td>
               </tr>
             </table>
@@ -3067,6 +3217,232 @@ app.get('/api/tasks/:id/activity', authenticateToken, async (req, res) => {
 });
 
 // ==================== CHAT ROUTES ====================
+
+app.post('/api/teams/:teamId/meetings', authenticateToken, async (req, res) => {
+  try {
+    const { teamId } = req.params;
+    const { roomId, meetingUrl, mode = 'video' } = req.body;
+    const normalizedMode = mode === 'audio' ? 'audio' : 'video';
+
+    if (!isValidMeetingRoomId(roomId)) {
+      return res.status(400).json({ error: 'Invalid meeting room id' });
+    }
+
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(meetingUrl);
+    } catch {
+      return res.status(400).json({ error: 'Invalid meeting URL' });
+    }
+
+    const expectedPath = `/teams/${teamId}/meeting/${roomId}`;
+    if (parsedUrl.pathname !== expectedPath) {
+      return res.status(400).json({ error: 'Meeting URL does not match this team room' });
+    }
+
+    const teamResult = await pool.query(
+      `SELECT t.id, t.name
+       FROM teams t
+       JOIN team_members tm ON tm.team_id = t.id
+       WHERE t.id = $1 AND tm.user_id = $2`,
+      [teamId, req.user.id]
+    );
+
+    if (teamResult.rows.length === 0) {
+      return res.status(403).json({ error: 'You are not a member of this team' });
+    }
+
+    const team = teamResult.rows[0];
+    const starter = await pool.query('SELECT id, name, email FROM users WHERE id = $1', [req.user.id]);
+    const starterName = starter.rows[0]?.name || starter.rows[0]?.email || 'A teammate';
+    const scheduleKey = `${teamId}:${roomId}`;
+
+    if (pendingMeetingEmails.has(scheduleKey)) {
+      return res.json({
+        message: 'Meeting email is already scheduled',
+        roomId,
+        delayMs: 60000,
+        alreadyScheduled: true
+      });
+    }
+
+    const timer = setTimeout(async () => {
+      pendingMeetingEmails.delete(scheduleKey);
+
+      if (!emailConfigured) {
+        console.warn(`Meeting email skipped for ${scheduleKey}: EmailJS not configured`);
+        return;
+      }
+
+      try {
+        const members = await pool.query(
+          `SELECT u.id, u.name, u.email
+           FROM team_members tm
+           JOIN users u ON u.id = tm.user_id
+           WHERE tm.team_id = $1 AND u.email IS NOT NULL`,
+          [teamId]
+        );
+
+        for (const member of members.rows) {
+          await sendEmail({
+            to: member.email,
+            toName: member.name,
+            subject: `${starterName} started a CampusTasks ${normalizedMode === 'audio' ? 'call' : 'meeting'} for ${team.name}`,
+            html: buildMeetingInviteEmail({
+              recipientName: member.name,
+              starterName,
+              teamName: team.name,
+              meetingUrl,
+              mode: normalizedMode
+            }),
+            text: `${starterName} started a CampusTasks ${normalizedMode === 'audio' ? 'audio call' : 'meeting'} for ${team.name}. Join: ${meetingUrl}`,
+            templateParams: {
+              email_type: 'meeting_invite',
+              team_name: team.name,
+              starter_name: starterName,
+              meeting_url: meetingUrl,
+              action_url: meetingUrl,
+              mode: normalizedMode
+            }
+          });
+        }
+      } catch (error) {
+        console.error(`Meeting email job failed for ${scheduleKey}:`, error.message);
+      }
+    }, 60 * 1000);
+
+    pendingMeetingEmails.set(scheduleKey, {
+      timer,
+      starterId: req.user.id,
+      teamId: Number(teamId),
+      roomId,
+      meetingUrl
+    });
+
+    res.json({ message: 'Meeting email scheduled for one minute from now', roomId, delayMs: 60000 });
+  } catch (error) {
+    console.error('Schedule meeting email error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/teams/:teamId/meetings/:roomId/cancel', authenticateToken, async (req, res) => {
+  try {
+    const { teamId, roomId } = req.params;
+    const scheduleKey = `${teamId}:${roomId}`;
+    const pendingMeeting = pendingMeetingEmails.get(scheduleKey);
+
+    if (!pendingMeeting) {
+      return res.json({ cancelled: false, message: 'No pending meeting email found' });
+    }
+
+    if (pendingMeeting.starterId !== req.user.id) {
+      return res.status(403).json({ error: 'Only the meeting starter can cancel the pending email' });
+    }
+
+    clearTimeout(pendingMeeting.timer);
+    pendingMeetingEmails.delete(scheduleKey);
+    res.json({ cancelled: true, message: 'Pending meeting email cancelled' });
+  } catch (error) {
+    console.error('Cancel meeting email error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.get('/api/teams/:teamId/meetings/:roomId/participants', authenticateToken, async (req, res) => {
+  try {
+    const { teamId, roomId } = req.params;
+    if (!isValidMeetingRoomId(roomId)) {
+      return res.status(400).json({ error: 'Invalid meeting room id' });
+    }
+
+    const member = await getMeetingMember(teamId, req.user.id);
+    if (!member) {
+      return res.status(403).json({ error: 'You are not a member of this team' });
+    }
+
+    res.json({ participants: serializeMeetingParticipants(teamId, roomId) });
+  } catch (error) {
+    console.error('Get meeting participants error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/teams/:teamId/meetings/:roomId/join', authenticateToken, async (req, res) => {
+  try {
+    const { teamId, roomId } = req.params;
+    if (!isValidMeetingRoomId(roomId)) {
+      return res.status(400).json({ error: 'Invalid meeting room id' });
+    }
+
+    const member = await getMeetingMember(teamId, req.user.id);
+    if (!member) {
+      return res.status(403).json({ error: 'You are not a member of this team' });
+    }
+
+    const participants = upsertMeetingParticipant(
+      teamId,
+      roomId,
+      member,
+      normalizeMeetingDeviceState(req.body)
+    );
+
+    res.json({ joined: true, participants });
+  } catch (error) {
+    console.error('Join meeting error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/teams/:teamId/meetings/:roomId/heartbeat', authenticateToken, async (req, res) => {
+  try {
+    const { teamId, roomId } = req.params;
+    if (!isValidMeetingRoomId(roomId)) {
+      return res.status(400).json({ error: 'Invalid meeting room id' });
+    }
+
+    const member = await getMeetingMember(teamId, req.user.id);
+    if (!member) {
+      return res.status(403).json({ error: 'You are not a member of this team' });
+    }
+
+    const participants = upsertMeetingParticipant(
+      teamId,
+      roomId,
+      member,
+      normalizeMeetingDeviceState(req.body)
+    );
+
+    res.json({ participants });
+  } catch (error) {
+    console.error('Meeting heartbeat error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/teams/:teamId/meetings/:roomId/leave', authenticateToken, async (req, res) => {
+  try {
+    const { teamId, roomId } = req.params;
+    if (!isValidMeetingRoomId(roomId)) {
+      return res.status(400).json({ error: 'Invalid meeting room id' });
+    }
+
+    const roomKey = getMeetingKey(teamId, roomId);
+    const room = activeMeetingRooms.get(roomKey);
+
+    if (room) {
+      room.delete(String(req.user.id));
+      if (room.size === 0) {
+        activeMeetingRooms.delete(roomKey);
+      }
+    }
+
+    res.json({ left: true, participants: serializeMeetingParticipants(teamId, roomId) });
+  } catch (error) {
+    console.error('Leave meeting error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
 
 // Get team messages
 app.get('/api/chat/team/:teamId', authenticateToken, async (req, res) => {
