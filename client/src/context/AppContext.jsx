@@ -65,10 +65,8 @@ export const AppProvider = ({ children }) => {
           setCurrentUser(parsedUser);
           setIsAuthenticated(true);
           
-          // Fetch additional data in background
-          fetchUserData(token).catch(err => {
-            console.error('Background fetch error:', err);
-          });
+          // Finish the first data refresh before rendering pages that depend on it.
+          await fetchUserData(token);
         }
       } catch (error) {
         console.error('Auth initialization error:', error);
@@ -108,8 +106,10 @@ export const AppProvider = ({ children }) => {
         headers: { Authorization: `Bearer ${authToken}` }
       });
       setTeams(response.data);
+      return response.data;
     } catch (error) {
       console.error('Error fetching teams:', error);
+      return [];
     }
   };
 
