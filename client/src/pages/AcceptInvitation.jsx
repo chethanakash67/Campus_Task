@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { FaUsers, FaClipboardList, FaCheckCircle, FaTimesCircle, FaExclamationCircle, FaInfoCircle } from 'react-icons/fa';
+import { useApp } from '../context/AppContext';
 import '../styles/auth.css';
 
 function AcceptInvitation() {
@@ -11,27 +12,50 @@ function AcceptInvitation() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [accepting, setAccepting] = useState(false);
+    const { logout } = useApp();
     
     const token = searchParams.get('token');
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+
+    const storePendingInvitation = useCallback((invite) => {
+        localStorage.setItem('pendingInvitation', token);
+        localStorage.setItem('invitationEmail', invite.invitee_email);
+        if (invite.invitee_name) {
+            localStorage.setItem('invitationName', invite.invitee_name);
+        }
+    }, [token]);
+
+    const getInviteAuthPath = (invite) => (
+        invite.invitee_exists ? '/login?from=invitation' : '/signup?from=invitation'
+    );
+
+    const isSignedInAsInvitee = (currentUser, invite) => (
+        currentUser?.email?.toLowerCase() === invite?.invitee_email?.toLowerCase()
+    );
 
     useEffect(() => {
         const fetchInvitation = async () => {
             try {
                 const response = await axios.get(`${API_URL}/teams/invitation/${token}`);
-                setInvitation(response.data);
+                const invite = response.data;
+                setInvitation(invite);
                 
                 // Check if user is authenticated
                 const currentUser = JSON.parse(localStorage.getItem('campusUser') || '{}');
                 if (!currentUser.id) {
-                    // User not authenticated - store invitation and redirect to login
-                    localStorage.setItem('pendingInvitation', token);
-                    localStorage.setItem('invitationEmail', response.data.invitee_email);
-                    if (response.data.invitee_name) {
-                        localStorage.setItem('invitationName', response.data.invitee_name);
-                    }
+                    // User not authenticated - store invitation and redirect based on account existence.
+                    storePendingInvitation(invite);
                     setLoading(false);
-                    navigate(response.data.invitee_exists ? '/login?from=invitation' : '/signup?from=invitation', { replace: true });
+                    navigate(getInviteAuthPath(invite), { replace: true });
+                    return;
+                }
+
+                if (!isSignedInAsInvitee(currentUser, invite)) {
+                    // The browser is signed in as another account. Clear it before continuing.
+                    storePendingInvitation(invite);
+                    logout();
+                    setLoading(false);
+                    navigate(getInviteAuthPath(invite), { replace: true });
                     return;
                 }
             } catch {
@@ -47,7 +71,7 @@ function AcceptInvitation() {
             setError('No invitation token found');
             setLoading(false);
         }
-    }, [token, navigate]);
+    }, [API_URL, logout, navigate, storePendingInvitation, token]);
 
    const handleAccept = async () => {
     try {
@@ -55,13 +79,16 @@ function AcceptInvitation() {
         const currentUser = JSON.parse(localStorage.getItem('campusUser') || '{}');
         
         if (!currentUser.id) {
-            // User not logged in - store invitation and redirect to login
-            localStorage.setItem('pendingInvitation', token);
-            localStorage.setItem('invitationEmail', invitation.invitee_email);
-            if (invitation.invitee_name) {
-                localStorage.setItem('invitationName', invitation.invitee_name);
-            }
-            navigate(invitation.invitee_exists ? '/login?from=invitation' : '/signup?from=invitation');
+            // User not logged in - store invitation and redirect based on account existence.
+            storePendingInvitation(invitation);
+            navigate(getInviteAuthPath(invitation));
+            return;
+        }
+
+        if (!isSignedInAsInvitee(currentUser, invitation)) {
+            storePendingInvitation(invitation);
+            logout();
+            navigate(getInviteAuthPath(invitation), { replace: true });
             return;
         }
 
@@ -87,20 +114,13 @@ function AcceptInvitation() {
         navigate('/teams');
     } catch (err) {
         const errorMessage = err.response?.data?.error || 'Failed to accept invitation';
-        setError(errorMessage);
-        // If user email doesn't match, offer to redirect to signup
         if (errorMessage.includes('different email')) {
-            setTimeout(() => {
-                if (confirm('Would you like to sign up with the invitation email instead?')) {
-                    localStorage.setItem('pendingInvitation', token);
-                    localStorage.setItem('invitationEmail', invitation.invitee_email);
-                    if (invitation.invitee_name) {
-                        localStorage.setItem('invitationName', invitation.invitee_name);
-                    }
-                    navigate('/signup?from=invitation');
-                }
-            }, 1000);
+            storePendingInvitation(invitation);
+            logout();
+            navigate(getInviteAuthPath(invitation), { replace: true });
+            return;
         }
+        setError(errorMessage);
     } finally {
         setAccepting(false);
     }
