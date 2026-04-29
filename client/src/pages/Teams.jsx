@@ -42,6 +42,7 @@ function Teams() {
   const [editingTeam, setEditingTeam] = useState(null);
   const [selectedTeamForTask, setSelectedTeamForTask] = useState(null);
   const [expandedTeam, setExpandedTeam] = useState(null);
+  const [memberListTeam, setMemberListTeam] = useState(null);
 
   const [newTeam, setNewTeam] = useState({
     name: '',
@@ -271,9 +272,18 @@ function Teams() {
   const toggleExpandTeam = (teamId) => {
     const next = expandedTeam === teamId ? null : teamId;
     setExpandedTeam(next);
+    if (!next && memberListTeam === teamId) {
+      setMemberListTeam(null);
+    }
     if (next) {
       loadStandups(next);
     }
+  };
+
+  const showTeamMembers = (teamId) => {
+    setExpandedTeam(teamId);
+    setMemberListTeam(teamId);
+    loadStandups(teamId);
   };
 
   const loadStandups = async (teamId) => {
@@ -474,6 +484,15 @@ function Teams() {
 
                       <div className="team-item-right">
                         <div className="team-members-avatars">
+                          <button
+                            type="button"
+                            className="members-stack-button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              showTeamMembers(team.id);
+                            }}
+                            title="Show all members"
+                          >
                           {team.members.slice(0, 4).map((member, idx) => (
                             <div
                               key={member.id}
@@ -489,6 +508,7 @@ function Teams() {
                               +{team.members.length - 4}
                             </div>
                           )}
+                          </button>
                         </div>
                         <div className="team-item-actions">
                           <button
@@ -545,6 +565,24 @@ function Teams() {
 
                     {isExpanded && (
                       <div className="team-details-panel">
+                        {memberListTeam === team.id && (
+                          <div className="team-members-panel">
+                            <div className="team-section-title">Members ({team.members.length})</div>
+                            <div className="team-members-grid">
+                              {team.members.map(member => (
+                                <div key={member.email || member.id} className="team-member-card">
+                                  <div className="member-avatar-card">{member.id}</div>
+                                  <div className="team-member-info">
+                                    <div className="team-member-name">{member.name}</div>
+                                    <div className="team-member-email">{member.email}</div>
+                                  </div>
+                                  <span className="team-member-role">{member.role || 'Member'}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Progress Bar */}
                         {stats.total > 0 && (
                         <div className="team-progress-section">
