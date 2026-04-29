@@ -44,8 +44,12 @@ This guide outlines the steps to deploy the CampusTasks application.
     | `DB_NAME` | From Render PostgreSQL (Database) |
     | `DB_USER` | From Render PostgreSQL (User) |
     | `DB_PASSWORD` | From Render PostgreSQL (Password) |
-    | `EMAIL_USER` | Your email address (for notifications) |
-    | `EMAIL_PASSWORD` | Your email app password |
+    | `EMAILJS_SERVICE_ID` | Your EmailJS service ID |
+    | `EMAILJS_TEMPLATE_ID` | Your EmailJS template ID |
+    | `EMAILJS_API_KEY` | Your EmailJS public key/API key |
+    | `EMAILJS_PRIVATE_KEY` | Your EmailJS private key, if your account/template requires it |
+    | `EMAILJS_FROM_NAME` | Sender name shown in templates, e.g. `CampusTasks` |
+    | `EMAILJS_REPLY_TO` | Optional reply-to email |
     | `GOOGLE_CLIENT_ID` | (Optional) For Google Auth |
     | `GOOGLE_CLIENT_SECRET` | (Optional) For Google Auth |
 

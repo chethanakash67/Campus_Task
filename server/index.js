@@ -6,7 +6,6 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { Pool } = require('pg');
-const nodemailer = require('nodemailer');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const session = require('express-session');
@@ -14,6 +13,7 @@ const path = require('path');
 
 // Always load env from server/.env regardless of where node is launched from.
 require('dotenv').config({ path: path.join(__dirname, '.env') });
+const { sendEmail, isEmailConfigured, getEmailStatus } = require('./services/emailService');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -51,59 +51,21 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // ==================== EMAIL CONFIGURATION ====================
-let transporter = null;
-let emailConfigured = false;
+const emailConfigured = isEmailConfigured();
+const emailStatus = getEmailStatus();
 
-try {
-  if (process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
-    transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASSWORD
-      }
-    });
-
-    // Verify email configuration
-    transporter.verify((error, success) => {
-      if (error) {
-        console.error('❌ Email configuration error:', error.message);
-        console.log('ℹ️  Please check EMAIL_USER and EMAIL_PASSWORD in .env file');
-      } else {
-        console.log('✅ Email server is ready to send messages');
-        emailConfigured = true;
-      }
-    });
-  } else {
-    console.warn('⚠️  Email not configured. Set EMAIL_USER and EMAIL_PASSWORD in .env');
-  }
-} catch (error) {
-  console.error('❌ Failed to initialize email transporter:', error.message);
+if (emailConfigured) {
+  console.log('✅ EmailJS is configured for outbound emails');
+} else {
+  console.warn(`⚠️  EmailJS not configured. Missing: ${emailStatus.missing.join(', ')}`);
 }
 
 // ==================== DEBUG ROUTES ====================
 app.get('/api/debug/email', async (req, res) => {
-  const configStatus = {
-    envUserSet: !!process.env.EMAIL_USER,
-    envPassSet: !!process.env.EMAIL_PASSWORD,
-    user: process.env.EMAIL_USER ? process.env.EMAIL_USER.replace(/(.{3})(.*)(@.*)/, '$1***$3') : 'Not Set',
-    transportCreated: !!transporter,
-    previousVerifyStatus: emailConfigured
-  };
-
-  if (transporter) {
-    try {
-      await transporter.verify();
-      configStatus.liveConnectionTest = 'Success';
-    } catch (error) {
-      configStatus.liveConnectionTest = 'Failed: ' + error.message;
-      configStatus.errorDetails = error;
-    }
-  } else {
-    configStatus.liveConnectionTest = 'Transporter not initialized (check env vars)';
-  }
-
-  res.json(configStatus);
+  res.json({
+    ...getEmailStatus(),
+    liveConnectionTest: 'Not run. EmailJS REST does not provide an SMTP-style verify call.'
+  });
 });
 
 // ==================== DATABASE CONNECTION ====================
@@ -531,7 +493,7 @@ function generateOTP() {
 }
 
 async function sendOTPEmail(email, name, otp, purpose = 'verify') {
-  if (!transporter || !emailConfigured) {
+  if (!emailConfigured) {
     console.warn(`⚠️  Email not configured. Mock OTP for ${email}: ${otp}`);
     return false;
   }
@@ -545,9 +507,9 @@ async function sendOTPEmail(email, name, otp, purpose = 'verify') {
       ? `Welcome back, ${name}!`
       : `Welcome to CampusTasks, ${name}!`;
 
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+    const sent = await sendEmail({
       to: email,
+      toName: name,
       subject: subject,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -558,10 +520,16 @@ async function sendOTPEmail(email, name, otp, purpose = 'verify') {
           </div>
           <p>This code will expire in 10 minutes.</p>
         </div>
-      `
+      `,
+      templateParams: {
+        email_type: 'otp',
+        name,
+        otp,
+        purpose
+      }
     });
-    console.log(`✅ OTP email sent to ${email}`);
-    return true;
+    if (sent) console.log(`✅ OTP email sent to ${email}`);
+    return sent;
   } catch (error) {
     console.error('❌ Email sending error:', error);
     return false;
@@ -758,11 +726,11 @@ async function sendDeadlineReminders() {
         { taskId: row.task_id, teamId: row.team_id, daysBefore }
       );
 
-      if (transporter && emailConfigured && row.email) {
+      if (emailConfigured && row.email) {
         try {
-          await transporter.sendMail({
-            from: process.env.EMAIL_USER,
+          await sendEmail({
             to: row.email,
+            toName: row.user_name,
             subject: `Reminder: "${row.task_title}" due in ${daysBefore} day${daysBefore === 1 ? '' : 's'}`,
             html: `
               <div style="font-family: Arial, sans-serif; max-width: 620px; margin: 0 auto; padding: 20px;">
@@ -778,7 +746,14 @@ async function sendDeadlineReminders() {
                   </a>
                 </div>
               </div>
-            `
+            `,
+            templateParams: {
+              email_type: 'deadline_reminder',
+              task_title: row.task_title,
+              team_name: row.team_name || '',
+              days_before: daysBefore,
+              action_url: `${FRONTEND_URL}/assigned-tasks`
+            }
           });
         } catch (emailError) {
           console.error(`Deadline reminder email error for task ${row.task_id}:`, emailError.message);
@@ -1062,11 +1037,11 @@ async function sendStalledTaskNudges() {
         { taskId: row.task_id, type: 'stalled_task' }
       );
 
-      if (transporter && emailConfigured && row.email) {
+      if (emailConfigured && row.email) {
         try {
-          await transporter.sendMail({
-            from: process.env.EMAIL_USER,
+          await sendEmail({
             to: row.email,
+            toName: row.user_name,
             subject: `Nudge: "${row.task_title}" looks stalled`,
             html: `
               <div style="font-family: Arial, sans-serif; max-width: 620px; margin: 0 auto; padding: 20px;">
@@ -1084,7 +1059,12 @@ async function sendStalledTaskNudges() {
                   Open Tasks
                 </a>
               </div>
-            `
+            `,
+            templateParams: {
+              email_type: 'stalled_task_nudge',
+              task_title: row.task_title,
+              action_url: `${FRONTEND_URL}/tasks`
+            }
           });
         } catch (emailError) {
           console.error(`Stalled nudge email error for task ${row.task_id}:`, emailError.message);
@@ -1381,16 +1361,22 @@ app.put('/api/teams/:id', authenticateToken, async (req, res) => {
           [id, req.user.id, email, member.name || null, roleToAssign, inviteToken, expiresAt]
         );
 
-        if (transporter && emailConfigured) {
-          await transporter.sendMail({
-            from: process.env.EMAIL_USER,
+        if (emailConfigured) {
+          await sendEmail({
             to: email,
+            toName: member.name,
             subject: `Join "${teamName}" on CampusTasks`,
             html: `
               <h2>Team Invitation</h2>
               <p>${req.user.name || req.user.email} invited you to join <strong>${teamName}</strong>.</p>
               <a href="${FRONTEND_URL}/accept-invitation?token=${inviteToken}">Accept Invitation</a>
-            `
+            `,
+            templateParams: {
+              email_type: 'team_invitation',
+              team_name: teamName,
+              inviter_name: req.user.name || req.user.email,
+              action_url: `${FRONTEND_URL}/accept-invitation?token=${inviteToken}`
+            }
           });
         }
       }
@@ -1536,16 +1522,22 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     const user = result.rows[0];
     const resetToken = jwt.sign({ id: user.id }, process.env.JWT_SECRET || 'your_jwt_secret_key', { expiresIn: '1h' });
 
-    if (transporter && emailConfigured) {
-      await transporter.sendMail({
-        from: process.env.EMAIL_USER,
+    if (emailConfigured) {
+      await sendEmail({
         to: email,
+        toName: user.name,
         subject: 'Password Reset Request - CampusTasks',
         html: `
           <h2>Password Reset</h2>
           <p>Click below to reset your password:</p>
           <a href="${FRONTEND_URL}/reset-password?token=${resetToken}">Reset Password</a>
-        `
+        `,
+        templateParams: {
+          email_type: 'password_reset',
+          name: user.name,
+          reset_url: `${FRONTEND_URL}/reset-password?token=${resetToken}`,
+          action_url: `${FRONTEND_URL}/reset-password?token=${resetToken}`
+        }
       });
     } else {
       console.log(`Dev Mode: Reset token for ${email}: ${resetToken}`);
@@ -1653,18 +1645,24 @@ app.post('/api/teams', authenticateToken, async (req, res) => {
           );
         }
 
-        if (transporter && emailConfigured) {
+        if (emailConfigured) {
           try {
             const inviter = await client.query('SELECT name FROM users WHERE id = $1', [req.user.id]);
-            await transporter.sendMail({
-              from: process.env.EMAIL_USER,
+            await sendEmail({
               to: member.email,
+              toName: member.name,
               subject: `You're invited to join ${team.name} on CampusTasks`,
               html: `
                 <h2>Team Invitation</h2>
                 <p>${inviter.rows[0].name} has invited you to join "${team.name}".</p>
                 <a href="${FRONTEND_URL}/accept-invitation?token=${token}">Accept Invitation</a>
-              `
+              `,
+              templateParams: {
+                email_type: 'team_invitation',
+                team_name: team.name,
+                inviter_name: inviter.rows[0].name,
+                action_url: `${FRONTEND_URL}/accept-invitation?token=${token}`
+              }
             });
           } catch (emailError) {
             console.error('Invitation email error:', emailError);
@@ -1907,18 +1905,24 @@ app.post('/api/teams/join-by-code', authenticateToken, async (req, res) => {
       { teamId: team.id }
     );
 
-    if (transporter && emailConfigured) {
+    if (emailConfigured) {
       const owner = await client.query('SELECT email, name FROM users WHERE id = $1', [team.created_by]);
       if (owner.rows.length > 0) {
-        await transporter.sendMail({
-          from: process.env.EMAIL_USER,
+        await sendEmail({
           to: owner.rows[0].email,
+          toName: owner.rows[0].name,
           subject: `New join request for ${team.name}`,
           html: `
             <h3>Team Join Request</h3>
             <p>${req.user.name || req.user.email} requested to join <strong>${team.name}</strong>.</p>
             <p>Open CampusTasks Teams page to accept or reject.</p>
-          `
+          `,
+          templateParams: {
+            email_type: 'join_request',
+            team_name: team.name,
+            requester_name: req.user.name || req.user.email,
+            action_url: `${FRONTEND_URL}/teams`
+          }
         });
       }
     }
@@ -2289,15 +2293,15 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
           );
 
           // Send email notification to assigned user
-          if (transporter && emailConfigured) {
+          if (emailConfigured) {
             try {
               const userResult = await client.query('SELECT email, name FROM users WHERE id = $1', [assignee.id]);
               const assignedUser = userResult.rows[0];
 
               if (assignedUser?.email) {
-                await transporter.sendMail({
-                  from: process.env.EMAIL_USER,
+                await sendEmail({
                   to: assignedUser.email,
+                  toName: assignedUser.name,
                   subject: `📋 New Task Assigned: ${title}`,
                   html: `
                     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
@@ -2342,7 +2346,19 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
                         </p>
                       </div>
                     </div>
-                  `
+                  `,
+                  templateParams: {
+                    email_type: 'task_assigned',
+                    task_title: title,
+                    task_description: description || '',
+                    team_name: teamName || '',
+                    priority,
+                    due_date: normalizedDueDate
+                      ? new Date(normalizedDueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                      : '',
+                    creator_name: creatorName,
+                    action_url: `${FRONTEND_URL}/assigned-tasks`
+                  }
                 });
                 console.log(`✅ Task assignment email sent to ${assignedUser.email}`);
               }
@@ -2771,7 +2787,7 @@ app.post('/api/tasks/:id/progress', authenticateToken, async (req, res) => {
     await client.query('COMMIT');
 
     // Send email notification to task owner if different from updater
-    if (task.created_by !== req.user.id && transporter && emailConfigured) {
+    if (task.created_by !== req.user.id && emailConfigured) {
       try {
         // Get team name if applicable
         let teamName = null;
@@ -2780,9 +2796,9 @@ app.post('/api/tasks/:id/progress', authenticateToken, async (req, res) => {
           teamName = teamResult.rows[0]?.name;
         }
 
-        await transporter.sendMail({
-          from: process.env.EMAIL_USER,
+        await sendEmail({
           to: task.creator_email,
+          toName: task.creator_name,
           subject: `📊 Task Progress Update: ${task.title}`,
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
@@ -2824,7 +2840,17 @@ app.post('/api/tasks/:id/progress', authenticateToken, async (req, res) => {
                 </p>
               </div>
             </div>
-          `
+          `,
+          templateParams: {
+            email_type: 'progress_update',
+            task_title: task.title,
+            team_name: teamName || '',
+            updater_name: userName,
+            old_progress: oldProgress,
+            progress,
+            note: note || '',
+            action_url: `${FRONTEND_URL}/tasks`
+          }
         });
         console.log(`✅ Progress update email sent to ${task.creator_email}`);
       } catch (emailError) {
