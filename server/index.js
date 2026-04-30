@@ -55,7 +55,9 @@ const emailConfigured = isEmailConfigured();
 const emailStatus = getEmailStatus();
 const pendingMeetingEmails = new Map();
 const activeMeetingRooms = new Map();
+const meetingSignals = new Map();
 const MEETING_PRESENCE_TTL_MS = 20000;
+const MEETING_SIGNAL_TTL_MS = 2 * 60 * 1000;
 
 if (emailConfigured) {
   console.log('✅ EmailJS is configured for outbound emails');
@@ -513,10 +515,16 @@ function isValidMeetingRoomId(roomId) {
 }
 
 function normalizeMeetingDeviceState(payload = {}) {
+  const displayName = typeof payload.displayName === 'string'
+    ? payload.displayName.trim().slice(0, 80)
+    : '';
+
   return {
     micOn: Boolean(payload.micOn),
     cameraOn: Boolean(payload.cameraOn),
-    screenOn: Boolean(payload.screenOn)
+    screenOn: Boolean(payload.screenOn),
+    handRaised: Boolean(payload.handRaised),
+    displayName
   };
 }
 
@@ -539,6 +547,80 @@ function pruneMeetingParticipants(roomKey) {
   return room;
 }
 
+function pruneMeetingSignals(roomKey) {
+  const room = meetingSignals.get(roomKey);
+  if (!room) return null;
+
+  const cutoff = Date.now() - MEETING_SIGNAL_TTL_MS;
+  room.messages = room.messages.filter((message) => message.createdAt > cutoff);
+
+  if (room.messages.length === 0 && !activeMeetingRooms.has(roomKey)) {
+    meetingSignals.delete(roomKey);
+    return null;
+  }
+
+  return room;
+}
+
+function getMeetingSignalRoom(teamId, roomId) {
+  const roomKey = getMeetingKey(teamId, roomId);
+  const existing = pruneMeetingSignals(roomKey);
+  if (existing) return existing;
+
+  const nextRoom = { nextId: 1, messages: [] };
+  meetingSignals.set(roomKey, nextRoom);
+  return nextRoom;
+}
+
+function appendMeetingSignal(teamId, roomId, signal) {
+  const room = getMeetingSignalRoom(teamId, roomId);
+  const message = {
+    id: room.nextId,
+    type: signal.type,
+    from: Number(signal.from),
+    to: signal.to === null || signal.to === undefined ? null : Number(signal.to),
+    payload: signal.payload || {},
+    createdAt: Date.now()
+  };
+
+  room.nextId += 1;
+  room.messages.push(message);
+  pruneMeetingSignals(getMeetingKey(teamId, roomId));
+  return message;
+}
+
+function getLatestMeetingSignalId(teamId, roomId) {
+  const room = getMeetingSignalRoom(teamId, roomId);
+  return Math.max(0, room.nextId - 1);
+}
+
+function serializeMeetingSignals(teamId, roomId, userId, afterId = 0) {
+  const roomKey = getMeetingKey(teamId, roomId);
+  const room = pruneMeetingSignals(roomKey);
+  if (!room) {
+    return { signals: [], latestId: afterId };
+  }
+
+  const currentUserId = Number(userId);
+  const signals = room.messages
+    .filter((message) => message.id > afterId)
+    .filter((message) => message.from !== currentUserId)
+    .filter((message) => message.to === null || message.to === currentUserId)
+    .map((message) => ({
+      id: message.id,
+      type: message.type,
+      from: message.from,
+      to: message.to,
+      payload: message.payload,
+      createdAt: new Date(message.createdAt).toISOString()
+    }));
+
+  return {
+    signals,
+    latestId: room.nextId - 1
+  };
+}
+
 function serializeMeetingParticipants(teamId, roomId) {
   const roomKey = getMeetingKey(teamId, roomId);
   const room = pruneMeetingParticipants(roomKey);
@@ -555,6 +637,7 @@ function serializeMeetingParticipants(teamId, roomId) {
       micOn: participant.micOn,
       cameraOn: participant.cameraOn,
       screenOn: participant.screenOn,
+      handRaised: participant.handRaised,
       joinedAt: new Date(participant.joinedAt).toISOString(),
       lastSeen: new Date(participant.lastSeen).toISOString()
     }));
@@ -581,11 +664,14 @@ function upsertMeetingParticipant(teamId, roomId, member, deviceState) {
 
   room.set(participantKey, {
     id: member.id,
-    name: member.name || member.email || 'Teammate',
+    name: deviceState.displayName || member.name || member.email || 'Teammate',
     email: member.email,
     avatar: member.avatar,
     role: member.role || 'Member',
-    ...deviceState,
+    micOn: deviceState.micOn,
+    cameraOn: deviceState.cameraOn,
+    screenOn: deviceState.screenOn,
+    handRaised: deviceState.handRaised,
     joinedAt: existing?.joinedAt || now,
     lastSeen: now
   });
@@ -3387,9 +3473,94 @@ app.post('/api/teams/:teamId/meetings/:roomId/join', authenticateToken, async (r
       normalizeMeetingDeviceState(req.body)
     );
 
-    res.json({ joined: true, participants });
+    res.json({
+      joined: true,
+      participants,
+      signalCursor: getLatestMeetingSignalId(teamId, roomId)
+    });
   } catch (error) {
     console.error('Join meeting error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.get('/api/teams/:teamId/meetings/:roomId/signals', authenticateToken, async (req, res) => {
+  try {
+    const { teamId, roomId } = req.params;
+    if (!isValidMeetingRoomId(roomId)) {
+      return res.status(400).json({ error: 'Invalid meeting room id' });
+    }
+
+    const member = await getMeetingMember(teamId, req.user.id);
+    if (!member) {
+      return res.status(403).json({ error: 'You are not a member of this team' });
+    }
+
+    const afterId = Number.parseInt(req.query.after, 10);
+    const result = serializeMeetingSignals(
+      teamId,
+      roomId,
+      req.user.id,
+      Number.isFinite(afterId) ? afterId : 0
+    );
+
+    res.json(result);
+  } catch (error) {
+    console.error('Get meeting signals error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/teams/:teamId/meetings/:roomId/signals', authenticateToken, async (req, res) => {
+  try {
+    const { teamId, roomId } = req.params;
+    const { type, to, payload } = req.body;
+    const allowedTypes = new Set([
+      'offer',
+      'answer',
+      'ice-candidate',
+      'renegotiate',
+      'peer-left',
+      'chat-message'
+    ]);
+
+    if (!isValidMeetingRoomId(roomId)) {
+      return res.status(400).json({ error: 'Invalid meeting room id' });
+    }
+
+    if (!allowedTypes.has(type)) {
+      return res.status(400).json({ error: 'Invalid meeting signal type' });
+    }
+
+    const member = await getMeetingMember(teamId, req.user.id);
+    if (!member) {
+      return res.status(403).json({ error: 'You are not a member of this team' });
+    }
+
+    const targetId = to === null || to === undefined || to === '' ? null : Number(to);
+    if (targetId !== null && !Number.isFinite(targetId)) {
+      return res.status(400).json({ error: 'Invalid meeting signal target' });
+    }
+
+    const message = appendMeetingSignal(teamId, roomId, {
+      type,
+      from: req.user.id,
+      to: targetId,
+      payload: payload && typeof payload === 'object' ? payload : {}
+    });
+
+    res.json({
+      signal: {
+        id: message.id,
+        type: message.type,
+        from: message.from,
+        to: message.to,
+        payload: message.payload,
+        createdAt: new Date(message.createdAt).toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('Post meeting signal error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -3436,6 +3607,13 @@ app.post('/api/teams/:teamId/meetings/:roomId/leave', authenticateToken, async (
         activeMeetingRooms.delete(roomKey);
       }
     }
+
+    appendMeetingSignal(teamId, roomId, {
+      type: 'peer-left',
+      from: req.user.id,
+      to: null,
+      payload: { userId: req.user.id }
+    });
 
     res.json({ left: true, participants: serializeMeetingParticipants(teamId, roomId) });
   } catch (error) {
