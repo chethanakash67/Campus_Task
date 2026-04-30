@@ -239,6 +239,151 @@
   background: #333333;
 }
 
+.schedule-meet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(17, 24, 39, 0.56);
+  backdrop-filter: blur(4px);
+}
+
+.schedule-meet-modal {
+  width: min(100%, 520px);
+  max-height: 92vh;
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  box-shadow: 0 24px 54px rgba(15, 23, 42, 0.28);
+}
+
+.schedule-meet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid #eef0f5;
+}
+
+.schedule-meet-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  color: #111827;
+  font-size: 1.15rem;
+  line-height: 1.35;
+}
+
+.schedule-meet-close {
+  width: 38px;
+  height: 38px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #4b5563;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.schedule-meet-close:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.schedule-meet-body {
+  display: grid;
+  gap: 16px;
+  padding: 22px 24px;
+}
+
+.schedule-meet-body label {
+  display: grid;
+  gap: 8px;
+  color: #374151;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.schedule-meet-body input,
+.schedule-meet-body textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d7dbe8;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #111827;
+  padding: 12px 14px;
+  font: inherit;
+  font-weight: 500;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.schedule-meet-body textarea {
+  resize: vertical;
+  min-height: 92px;
+}
+
+.schedule-meet-body input:focus,
+.schedule-meet-body textarea:focus {
+  border-color: #111827;
+  box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.1);
+}
+
+.schedule-meet-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 18px 24px 24px;
+  border-top: 1px solid #eef0f5;
+}
+
+.schedule-meet-secondary,
+.schedule-meet-primary {
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.schedule-meet-secondary {
+  border: 1px solid #d7dbe8;
+  background: #ffffff;
+  color: #374151;
+}
+
+.schedule-meet-primary {
+  border: 1px solid #000000;
+  background: #000000;
+  color: #ffffff;
+}
+
+.schedule-meet-secondary:hover:not(:disabled) {
+  border-color: #111827;
+  color: #111827;
+}
+
+.schedule-meet-primary:hover:not(:disabled) {
+  background: #333333;
+}
+
+.schedule-meet-secondary:disabled,
+.schedule-meet-primary:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
 .message-link {
   color: inherit;
   font-weight: 800;
@@ -743,6 +888,26 @@
   .header-action-btn {
     padding: 7px 10px;
     font-size: 0.78rem;
+  }
+
+  .schedule-meet-modal {
+    border-radius: 12px;
+  }
+
+  .schedule-meet-header,
+  .schedule-meet-body,
+  .schedule-meet-actions {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .schedule-meet-actions {
+    flex-direction: column-reverse;
+  }
+
+  .schedule-meet-secondary,
+  .schedule-meet-primary {
+    width: 100%;
   }
 }
 

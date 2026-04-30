@@ -6,12 +6,24 @@ import Toast from '../components/Toast';
 import axios from 'axios';
 import { 
   FaPaperPlane, FaArrowLeft, FaUsers, FaFile, 
-  FaSmile, FaEllipsisV, FaReply, FaTrash, FaEdit, FaDownload, FaPhone, FaVideo, FaBookmark, FaSearch,
-  FaComments
+  FaSmile, FaEllipsisV, FaReply, FaTrash, FaEdit, FaDownload, FaVideo, FaBookmark, FaSearch,
+  FaComments, FaCalendarAlt, FaTimes
 } from 'react-icons/fa';
 import { useApp } from '../context/AppContext';
 import './Dashboard.css';
 import './TeamChat.css';
+
+const toDateTimeLocalValue = (date) => {
+  const pad = (value) => String(value).padStart(2, '0');
+
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
+const getDefaultMeetingTime = () => {
+  const date = new Date(Date.now() + 30 * 60 * 1000);
+  date.setMinutes(Math.ceil(date.getMinutes() / 15) * 15, 0, 0);
+  return toDateTimeLocalValue(date);
+};
 
 function TeamChat() {
   const { teamId } = useParams();
@@ -31,6 +43,13 @@ function TeamChat() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [bookmarkedMessageIds, setBookmarkedMessageIds] = useState([]);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduleSubmitting, setScheduleSubmitting] = useState(false);
+  const [scheduleForm, setScheduleForm] = useState({
+    title: 'Team meeting',
+    scheduledAt: getDefaultMeetingTime(),
+    note: ''
+  });
   
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -250,15 +269,21 @@ function TeamChat() {
     await fetchMessages();
   };
 
-  const openCampusMeeting = async (mode = 'video') => {
+  const createMeetingDetails = () => {
+    const room = `campustasks-${teamId}-${Date.now()}`;
+    const meetingPath = `/teams/${teamId}/meeting/${room}`;
+
+    return {
+      room,
+      meetingUrl: `${window.location.origin}${meetingPath}`,
+      starterPath: `${meetingPath}?starter=1`
+    };
+  };
+
+  const openCampusMeeting = async () => {
     try {
-      const room = `campustasks-${teamId}-${Date.now()}`;
-      const meetingPath = `/teams/${teamId}/meeting/${room}${mode === 'audio' ? '?mode=audio' : ''}`;
-      const meetingUrl = `${window.location.origin}${meetingPath}`;
-      const starterPath = `${meetingPath}${mode === 'audio' ? '&' : '?'}starter=1`;
-      const label = mode === 'audio'
-        ? `${currentUser?.name || 'A teammate'} started a CampusTasks audio room:`
-        : `${currentUser?.name || 'A teammate'} started a CampusTasks meeting:`;
+      const { meetingUrl, starterPath } = createMeetingDetails();
+      const label = `${currentUser?.name || 'A teammate'} started a CampusTasks meeting:`;
 
       await postSystemLinkMessage(label, meetingUrl);
       addToast('Meeting shared in chat. Join to start it and schedule the email invite.', 'success');
@@ -269,9 +294,95 @@ function TeamChat() {
     }
   };
 
-  const handleStartMeet = () => openCampusMeeting('video');
+  const handleStartMeet = () => openCampusMeeting();
 
-  const handleStartCall = () => openCampusMeeting('audio');
+  const openScheduleModal = () => {
+    setScheduleForm((previous) => ({
+      ...previous,
+      scheduledAt: getDefaultMeetingTime()
+    }));
+    setShowScheduleModal(true);
+  };
+
+  const closeScheduleModal = () => {
+    if (!scheduleSubmitting) {
+      setShowScheduleModal(false);
+    }
+  };
+
+  const handleScheduleMeet = async (event) => {
+    event.preventDefault();
+
+    const selectedDate = new Date(scheduleForm.scheduledAt);
+    if (!scheduleForm.scheduledAt || Number.isNaN(selectedDate.getTime())) {
+      addToast('Choose a valid meeting time', 'error');
+      return;
+    }
+
+    if (selectedDate <= new Date()) {
+      addToast('Choose a future time for the meet', 'error');
+      return;
+    }
+
+    try {
+      setScheduleSubmitting(true);
+      const token = localStorage.getItem('campusToken');
+      const { room, meetingUrl } = createMeetingDetails();
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const scheduleDisplay = selectedDate.toLocaleString([], {
+        dateStyle: 'medium',
+        timeStyle: 'short'
+      });
+
+      const response = await axios.post(
+        `${API_URL}/teams/${teamId}/meetings/schedule`,
+        {
+          roomId: room,
+          meetingUrl,
+          scheduledAt: selectedDate.toISOString(),
+          timezone,
+          title: scheduleForm.title.trim() || 'Team meeting',
+          note: scheduleForm.note.trim()
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      let sharedInChat = true;
+      try {
+        await postSystemLinkMessage(
+          `${currentUser?.name || 'A teammate'} scheduled a CampusTasks meeting for ${scheduleDisplay}:`,
+          meetingUrl
+        );
+      } catch (chatError) {
+        sharedInChat = false;
+        console.error('Scheduled meeting chat share failed:', chatError);
+      }
+
+      setShowScheduleModal(false);
+      setScheduleForm({
+        title: 'Team meeting',
+        scheduledAt: getDefaultMeetingTime(),
+        note: ''
+      });
+
+      if (!response.data?.emailConfigured) {
+        addToast('Meet scheduled, but email is not configured.', 'error');
+      } else if ((response.data?.emailedCount || 0) > 0) {
+        addToast(`Meet scheduled and emailed to ${response.data.emailedCount || 0} member(s).`, 'success');
+      } else {
+        addToast('Meet scheduled, but emails could not be sent.', 'error');
+      }
+
+      if (!sharedInChat) {
+        addToast('Meeting email was handled, but the chat link could not be shared.', 'error');
+      }
+    } catch (error) {
+      console.error('Error scheduling meeting:', error);
+      addToast(error.response?.data?.error || 'Failed to schedule meet', 'error');
+    } finally {
+      setScheduleSubmitting(false);
+    }
+  };
 
   const handleEditMessage = async () => {
     if (!editingMessage || !newMessage.trim()) return;
@@ -579,8 +690,8 @@ function TeamChat() {
               <button className="header-action-btn" onClick={handleExportTranscript} title="Export chat transcript">
                 <FaDownload /> Export
               </button>
-              <button className="header-action-btn" onClick={handleStartCall} title="Start Audio Call">
-                <FaPhone /> Call
+              <button className="header-action-btn" onClick={openScheduleModal} title="Schedule Meet">
+                <FaCalendarAlt /> Schedule
               </button>
               <button className="header-action-btn meet" onClick={handleStartMeet} title="Start Video Meeting">
                 <FaVideo /> Meet
@@ -693,6 +804,65 @@ function TeamChat() {
           </div>
         </div>
       </div>
+
+      {showScheduleModal && (
+        <div className="schedule-meet-overlay" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) closeScheduleModal();
+        }}>
+          <form className="schedule-meet-modal" onSubmit={handleScheduleMeet} role="dialog" aria-modal="true" aria-labelledby="schedule-meet-title">
+            <div className="schedule-meet-header">
+              <h2 id="schedule-meet-title"><FaCalendarAlt /> Schedule meet</h2>
+              <button type="button" onClick={closeScheduleModal} className="schedule-meet-close" aria-label="Close schedule meet">
+                <FaTimes />
+              </button>
+            </div>
+
+            <div className="schedule-meet-body">
+              <label>
+                Meeting title
+                <input
+                  type="text"
+                  value={scheduleForm.title}
+                  onChange={(event) => setScheduleForm((previous) => ({ ...previous, title: event.target.value }))}
+                  placeholder="Team meeting"
+                  maxLength={80}
+                />
+              </label>
+
+              <label>
+                Date and time
+                <input
+                  type="datetime-local"
+                  value={scheduleForm.scheduledAt}
+                  min={toDateTimeLocalValue(new Date())}
+                  onChange={(event) => setScheduleForm((previous) => ({ ...previous, scheduledAt: event.target.value }))}
+                  required
+                />
+              </label>
+
+              <label>
+                Note
+                <textarea
+                  value={scheduleForm.note}
+                  onChange={(event) => setScheduleForm((previous) => ({ ...previous, note: event.target.value }))}
+                  placeholder="Agenda or preparation details"
+                  rows={4}
+                  maxLength={500}
+                />
+              </label>
+            </div>
+
+            <div className="schedule-meet-actions">
+              <button type="button" className="schedule-meet-secondary" onClick={closeScheduleModal} disabled={scheduleSubmitting}>
+                Cancel
+              </button>
+              <button type="submit" className="schedule-meet-primary" disabled={scheduleSubmitting}>
+                {scheduleSubmitting ? 'Scheduling...' : 'Send schedule email'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

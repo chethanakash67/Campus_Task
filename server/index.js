@@ -812,6 +812,91 @@ function buildMeetingInviteEmail({ recipientName, starterName, teamName, meeting
   `;
 }
 
+function normalizeMeetingTimezone(timezone) {
+  const candidate = typeof timezone === 'string' ? timezone.trim() : '';
+  if (!candidate) return 'UTC';
+
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: candidate }).format(new Date());
+    return candidate;
+  } catch {
+    return 'UTC';
+  }
+}
+
+function formatScheduledMeetingTime(date, timezone) {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: normalizeMeetingTimezone(timezone),
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short'
+  }).format(date);
+}
+
+function buildScheduledMeetingEmail({ recipientName, schedulerName, teamName, meetingUrl, meetingTitle, scheduledTime, note }) {
+  const safeRecipientName = escapeHtml(recipientName || 'there');
+  const safeSchedulerName = escapeHtml(schedulerName || 'A teammate');
+  const safeTeamName = escapeHtml(teamName || 'your team');
+  const safeMeetingUrl = escapeHtml(meetingUrl);
+  const safeMeetingTitle = escapeHtml(meetingTitle || 'Team meeting');
+  const safeScheduledTime = escapeHtml(scheduledTime);
+  const safeNote = escapeHtml(note || '').replace(/\n/g, '<br>');
+
+  return `
+    <div style="display:none;max-height:0;overflow:hidden;color:transparent;opacity:0;">
+      ${safeSchedulerName} scheduled ${safeMeetingTitle} for ${safeTeamName} at ${safeScheduledTime}.
+    </div>
+    <div style="margin:0;padding:32px 16px;background:#f3f6fb;font-family:Arial,Helvetica,sans-serif;color:#111827;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+        <tr>
+          <td align="center">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;max-width:620px;background:#ffffff;border:1px solid #e5e7eb;border-radius:18px;overflow:hidden;">
+              <tr>
+                <td style="padding:28px 32px;background:#111827;color:#ffffff;">
+                  <div style="font-size:13px;line-height:18px;color:#cbd5e1;text-transform:uppercase;letter-spacing:1.4px;font-weight:700;">CampusTasks</div>
+                  <div style="font-size:24px;line-height:32px;font-weight:800;margin-top:4px;">Meeting scheduled</div>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:34px 32px 30px;">
+                  <h1 style="margin:0 0 10px;color:#111827;font-size:26px;line-height:34px;font-weight:800;">${safeMeetingTitle}</h1>
+                  <p style="margin:0;color:#4b5563;font-size:16px;line-height:25px;">
+                    Hi ${safeRecipientName}, <strong style="color:#111827;">${safeSchedulerName}</strong> scheduled a CampusTasks meeting for <strong style="color:#111827;">${safeTeamName}</strong>.
+                  </p>
+                  <div style="margin:24px 0;padding:18px 20px;border-radius:16px;background:#f8fafc;border:1px solid #e5e7eb;">
+                    <div style="color:#6b7280;font-size:13px;line-height:18px;text-transform:uppercase;letter-spacing:1.2px;font-weight:700;">Meeting time</div>
+                    <div style="margin-top:8px;color:#111827;font-size:21px;line-height:30px;font-weight:800;">${safeScheduledTime}</div>
+                    ${safeNote ? `<div style="margin-top:14px;color:#4b5563;font-size:15px;line-height:23px;">${safeNote}</div>` : ''}
+                  </div>
+                  <table role="presentation" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:0 0 22px;">
+                    <tr>
+                      <td style="border-radius:12px;background:#111827;">
+                        <a href="${safeMeetingUrl}" style="display:inline-block;padding:14px 24px;color:#ffffff;text-decoration:none;font-size:16px;line-height:20px;font-weight:800;border-radius:12px;">
+                          Join CampusTasks Meeting
+                        </a>
+                      </td>
+                    </tr>
+                  </table>
+                  <p style="margin:0 0 8px;color:#6b7280;font-size:14px;line-height:22px;">
+                    If the button does not work, copy and paste this link:
+                  </p>
+                  <p style="margin:0;word-break:break-all;color:#374151;font-size:13px;line-height:20px;">
+                    <a href="${safeMeetingUrl}" style="color:#2563eb;text-decoration:underline;">${safeMeetingUrl}</a>
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </div>
+  `;
+}
+
 async function sendOTPEmail(email, name, otp, purpose = 'verify') {
   if (!emailConfigured) {
     console.warn(`⚠️  Email not configured. Mock OTP for ${email}: ${otp}`);
@@ -3303,6 +3388,115 @@ app.get('/api/tasks/:id/activity', authenticateToken, async (req, res) => {
 });
 
 // ==================== CHAT ROUTES ====================
+
+app.post('/api/teams/:teamId/meetings/schedule', authenticateToken, async (req, res) => {
+  try {
+    const { teamId } = req.params;
+    const { roomId, meetingUrl, scheduledAt, timezone, title, note } = req.body;
+
+    if (!isValidMeetingRoomId(roomId)) {
+      return res.status(400).json({ error: 'Invalid meeting room id' });
+    }
+
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(meetingUrl);
+    } catch {
+      return res.status(400).json({ error: 'Invalid meeting URL' });
+    }
+
+    const expectedPath = `/teams/${teamId}/meeting/${roomId}`;
+    if (parsedUrl.pathname !== expectedPath) {
+      return res.status(400).json({ error: 'Meeting URL does not match this team room' });
+    }
+
+    const scheduledDate = new Date(scheduledAt);
+    if (!scheduledAt || Number.isNaN(scheduledDate.getTime())) {
+      return res.status(400).json({ error: 'Invalid meeting time' });
+    }
+
+    if (scheduledDate.getTime() <= Date.now()) {
+      return res.status(400).json({ error: 'Meeting time must be in the future' });
+    }
+
+    const teamResult = await pool.query(
+      `SELECT t.id, t.name
+       FROM teams t
+       JOIN team_members tm ON tm.team_id = t.id
+       WHERE t.id = $1 AND tm.user_id = $2`,
+      [teamId, req.user.id]
+    );
+
+    if (teamResult.rows.length === 0) {
+      return res.status(403).json({ error: 'You are not a member of this team' });
+    }
+
+    const team = teamResult.rows[0];
+    const schedulerResult = await pool.query('SELECT id, name, email FROM users WHERE id = $1', [req.user.id]);
+    const schedulerName = schedulerResult.rows[0]?.name || schedulerResult.rows[0]?.email || 'A teammate';
+    const meetingTitle = String(title || 'Team meeting').trim().slice(0, 80) || 'Team meeting';
+    const meetingNote = String(note || '').trim().slice(0, 500);
+    const scheduledTime = formatScheduledMeetingTime(scheduledDate, timezone);
+
+    const members = await pool.query(
+      `SELECT u.id, u.name, u.email
+       FROM team_members tm
+       JOIN users u ON u.id = tm.user_id
+       WHERE tm.team_id = $1 AND u.email IS NOT NULL`,
+      [teamId]
+    );
+
+    let emailedCount = 0;
+    if (emailConfigured) {
+      for (const member of members.rows) {
+        const sent = await sendEmail({
+          to: member.email,
+          toName: member.name,
+          subject: `${schedulerName} scheduled ${meetingTitle} for ${scheduledTime}`,
+          html: buildScheduledMeetingEmail({
+            recipientName: member.name,
+            schedulerName,
+            teamName: team.name,
+            meetingUrl,
+            meetingTitle,
+            scheduledTime,
+            note: meetingNote
+          }),
+          text: `${schedulerName} scheduled ${meetingTitle} for ${team.name} at ${scheduledTime}. Join: ${meetingUrl}${meetingNote ? ` Note: ${meetingNote}` : ''}`,
+          templateParams: {
+            email_type: 'scheduled_meeting',
+            team_name: team.name,
+            scheduler_name: schedulerName,
+            meeting_title: meetingTitle,
+            scheduled_at: scheduledDate.toISOString(),
+            scheduled_time: scheduledTime,
+            meeting_url: meetingUrl,
+            action_url: meetingUrl,
+            note: meetingNote
+          }
+        });
+
+        if (sent) emailedCount += 1;
+      }
+    } else {
+      console.warn(`Scheduled meeting email skipped for team ${teamId}: EmailJS not configured`);
+    }
+
+    res.json({
+      message: emailConfigured ? 'Scheduled meeting email sent' : 'Meeting scheduled but email is not configured',
+      roomId,
+      meetingUrl,
+      scheduledAt: scheduledDate.toISOString(),
+      scheduledTime,
+      emailConfigured,
+      emailedCount,
+      totalRecipients: members.rows.length
+    });
+  } catch (error) {
+    console.error('Schedule future meeting email error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
 
 app.post('/api/teams/:teamId/meetings', authenticateToken, async (req, res) => {
   try {
